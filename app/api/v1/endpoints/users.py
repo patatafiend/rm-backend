@@ -83,9 +83,6 @@ def revoke_device(
         raise HTTPException(status_code=403, detail="Forbidden")
     UserService.revoke_device(db, user_id, device_id)
 
-# ------------------------------------------------------------------ #
-#  SIGNIN HISTORY                                                       #
-# ------------------------------------------------------------------ #
 @router.get("/{user_id}/signin-history", response_model=PaginatedUsers)
 def signin_history(
     user_id: int,

@@ -9,9 +9,6 @@ from app.core.security import verify_password, hash_password
 
 class UserService:
 
-    # ------------------------------------------------------------------ #
-    #  LIST                                                                #
-    # ------------------------------------------------------------------ #
     @staticmethod
     def get_all(
         db: Session,
@@ -40,9 +37,6 @@ class UserService:
 
         return {"total": total, "page": page, "page_size": page_size, "items": items}
 
-    # ------------------------------------------------------------------ #
-    #  GET ONE                                                             #
-    # ------------------------------------------------------------------ #
     @staticmethod
     def get_by_id(db: Session, user_id: int) -> UserModel:
         user = db.query(UserModel).filter(UserModel.id == user_id).first()
@@ -50,9 +44,6 @@ class UserService:
             raise HTTPException(status_code=404, detail="User not found")
         return user
 
-    # ------------------------------------------------------------------ #
-    #  UPDATE OWN PROFILE                                                  #
-    # ------------------------------------------------------------------ #
     @staticmethod
     def update_me(db: Session, user: UserModel, payload: UserUpdate) -> UserModel:
         for field, value in payload.model_dump(exclude_none=True).items():
@@ -61,9 +52,6 @@ class UserService:
         db.refresh(user)
         return user
 
-    # ------------------------------------------------------------------ #
-    #  CHANGE OWN PASSWORD                                                 #
-    # ------------------------------------------------------------------ #
     @staticmethod
     def change_password(db: Session, user: UserModel, payload: ChangePasswordRequest):
         if not verify_password(payload.current_password, user.password):
@@ -71,9 +59,6 @@ class UserService:
         user.password = hash_password(payload.new_password)
         db.commit()
 
-    # ------------------------------------------------------------------ #
-    #  ADMIN — UPDATE ANY USER                                             #
-    # ------------------------------------------------------------------ #
     @staticmethod
     def admin_update(db: Session, user_id: int, payload: AdminUserUpdate) -> UserModel:
         user = UserService.get_by_id(db, user_id)
@@ -83,18 +68,12 @@ class UserService:
         db.refresh(user)
         return user
 
-    # ------------------------------------------------------------------ #
-    #  ADMIN — DELETE                                                      #
-    # ------------------------------------------------------------------ #
     @staticmethod
     def delete(db: Session, user_id: int):
         user = UserService.get_by_id(db, user_id)
         db.delete(user)
         db.commit()
 
-    # ------------------------------------------------------------------ #
-    #  ADMIN — TOGGLE BLOCK                                                #
-    # ------------------------------------------------------------------ #
     @staticmethod
     def toggle_block(db: Session, user_id: int) -> UserModel:
         user = UserService.get_by_id(db, user_id)
@@ -103,9 +82,6 @@ class UserService:
         db.refresh(user)
         return user
 
-    # ------------------------------------------------------------------ #
-    #  DEVICES                                                             #
-    # ------------------------------------------------------------------ #
     @staticmethod
     def get_devices(db: Session, user_id: int) -> list[UserDeviceModel]:
         UserService.get_by_id(db, user_id)  # ensures user exists
@@ -119,12 +95,9 @@ class UserService:
         ).first()
         if not device:
             raise HTTPException(status_code=404, detail="Device not found")
-        db.delete(device)  # cascades to UserTokenModel via DB cascade
+        db.delete(device)
         db.commit()
 
-    # ------------------------------------------------------------------ #
-    #  SIGNIN HISTORY                                                      #
-    # ------------------------------------------------------------------ #
     @staticmethod
     def get_signin_history(
         db: Session,

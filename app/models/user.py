@@ -12,7 +12,7 @@ from sqlalchemy import (
     Column,
 )
 from sqlalchemy.orm import Mapped, relationship
-from db.base import Base
+from app.db.base import Base
 
 class UserModel(Base):
     __tablename__ = "users"

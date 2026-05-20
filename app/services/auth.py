@@ -23,9 +23,6 @@ from app.schemas.device import DeviceInfo
 
 class AuthService:
 
-    # ------------------------------------------------------------------ #
-    #  REGISTER                                                            #
-    # ------------------------------------------------------------------ #
     @staticmethod
     def register(db: Session, payload: RegisterRequest, device: DeviceInfo) -> UserModel:
         existing = db.query(UserModel).filter(UserModel.email == payload.email).first()
@@ -49,16 +46,12 @@ class AuthService:
         db.refresh(user)
         return user
 
-    # ------------------------------------------------------------------ #
-    #  LOGIN                                                               #
-    # ------------------------------------------------------------------ #
     @staticmethod
     def login(db: Session, payload: LoginRequest, device: DeviceInfo) -> dict:
         user = db.query(UserModel).filter(UserModel.email == payload.email).first()
 
         success = bool(user and verify_password(payload.password, user.password))
 
-        # Always log the attempt
         if user:
             db.add(UserSigninModel(
                 user_id=user.id,
@@ -81,7 +74,6 @@ class AuthService:
 
         db.commit()
 
-        # MFA gate — return a short-lived mfa_token instead of full tokens
         if user.mfa_enabled:
             mfa_token = AuthService._create_mfa_token(db, user.id)
             return {"mfa_required": True, "mfa_token": mfa_token}
@@ -92,9 +84,6 @@ class AuthService:
 
         return {"access_token": access, "refresh_token": refresh, "mfa_required": False}
 
-    # ------------------------------------------------------------------ #
-    #  REFRESH TOKEN                                                       #
-    # ------------------------------------------------------------------ #
     @staticmethod
     def refresh(db: Session, refresh_token: str) -> dict:
         payload = decode_token(refresh_token)
@@ -110,9 +99,6 @@ class AuthService:
         new_access = create_access_token(int(payload["sub"]))
         return {"access_token": new_access, "token_type": "bearer"}
 
-    # ------------------------------------------------------------------ #
-    #  LOGOUT                                                              #
-    # ------------------------------------------------------------------ #
     @staticmethod
     def logout(db: Session, user: UserModel, refresh_token: str):
         token_row = db.query(UserTokenModel).filter(
@@ -123,9 +109,6 @@ class AuthService:
             db.delete(token_row)
             db.commit()
 
-    # ------------------------------------------------------------------ #
-    #  FORGOT / RESET PASSWORD                                             #
-    # ------------------------------------------------------------------ #
     @staticmethod
     def forgot_password(db: Session, email: str):
         user = db.query(UserModel).filter(UserModel.email == email).first()
@@ -160,9 +143,6 @@ class AuthService:
         reset.used = True
         db.commit()
 
-    # ------------------------------------------------------------------ #
-    #  MFA                                                                 #
-    # ------------------------------------------------------------------ #
     @staticmethod
     def mfa_setup(db: Session, user: UserModel) -> dict:
         secret = pyotp.random_base32()
@@ -170,7 +150,7 @@ class AuthService:
         db.commit()
 
         uri = pyotp.totp.TOTP(secret).provisioning_uri(
-            name=user.email, issuer_name="WellnessApp"
+            name=user.email, issuer_name="RequirementsMonitoringApp"
         )
         return {"secret": secret, "qr_uri": uri}
 
@@ -223,9 +203,6 @@ class AuthService:
         user.allow_skip_mfa = False
         db.commit()
 
-    # ------------------------------------------------------------------ #
-    #  HELPERS                                                             #
-    # ------------------------------------------------------------------ #
     @staticmethod
     def _create_mfa_token(db: Session, user_id: int) -> str:
         token = secrets.token_urlsafe(32)

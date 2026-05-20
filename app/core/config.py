@@ -4,6 +4,8 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     ENV: str | None = "DEV"
+    APP_NAME: str = "RM API"
+    API_V1_STR: str = "/api/v1"
     FRONTEND_URL: str
     DATABASE_URL: str
 
@@ -25,4 +27,6 @@ def get_settings():
     return Settings()
 
 
-setting = get_settings()
+settings = get_settings()
+
+print(settings.DATABASE_URL)
