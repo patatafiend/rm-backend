@@ -6,9 +6,13 @@ class Settings(BaseSettings):
     ENV: str | None = "DEV"
     APP_NAME: str = "RM API"
     API_V1_STR: str = "/api/v1"
+
     FRONTEND_URL: str
     DATABASE_URL: str
 
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    ALGORITHM: str = "HS256"
     JWT_SECRET_KEY: str
     JWT_REFRESH_SECRET_KEY: str
     JWT_PASSWORD_RESET_SECRET_KEY: str

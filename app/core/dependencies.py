@@ -12,10 +12,7 @@ def get_current_user(
     db: Session = Depends(get_db),
 ) -> UserModel:
     token = credentials.credentials
-    payload = decode_token(token)
-
-    if not payload or payload.get("type") != "access":
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+    payload = decode_token(token, token_type="access")
 
     user = db.query(UserModel).filter(UserModel.id == int(payload["sub"])).first()
 

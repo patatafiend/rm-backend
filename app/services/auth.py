@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.security import (
     hash_password, verify_password,
     create_access_token, create_refresh_token, decode_token,
@@ -86,9 +87,7 @@ class AuthService:
 
     @staticmethod
     def refresh(db: Session, refresh_token: str) -> dict:
-        payload = decode_token(refresh_token)
-        if not payload or payload.get("type") != "refresh":
-            raise HTTPException(status_code=401, detail="Invalid refresh token")
+        payload = decode_token(refresh_token, token_type="refresh")
 
         token_row = db.query(UserTokenModel).filter(
             UserTokenModel.token == refresh_token
@@ -96,8 +95,20 @@ class AuthService:
         if not token_row or token_row.expires_at < datetime.now(timezone.utc):
             raise HTTPException(status_code=401, detail="Refresh token expired or revoked")
 
-        new_access = create_access_token(int(payload["sub"]))
-        return {"access_token": new_access, "token_type": "bearer"}
+        user_id = int(payload["sub"])
+        new_access = create_access_token(user_id)
+        new_refresh = create_refresh_token(user_id)
+        
+        # Rotate refresh token: delete old, insert new
+        db.delete(token_row)
+        db.add(UserTokenModel(
+            user_id=user_id,
+            token=new_refresh,
+            expires_at=datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
+        ))
+        db.commit()
+        
+        return {"access_token": new_access, "refresh_token": new_refresh, "token_type": "bearer"}
 
     @staticmethod
     def logout(db: Session, user: UserModel, refresh_token: str):
