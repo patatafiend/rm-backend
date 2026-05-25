@@ -2,8 +2,20 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
-from app.models.user import UserModel, UserDeviceModel, UserSigninModel
-from app.schemas.user import UserUpdate, AdminUserUpdate, ChangePasswordRequest
+from app.models.user import (
+    UserModel,
+    UserDeviceModel,
+    UserSigninModel,
+    RoleModel,
+    Company,
+    Client,
+)
+from app.schemas.user import (
+    UserUpdate,
+    AdminUserUpdate,
+    AdminUserCreate,
+    ChangePasswordRequest,
+)
 from app.core.security import verify_password, hash_password
 
 
@@ -64,6 +76,62 @@ class UserService:
         user = UserService.get_by_id(db, user_id)
         for field, value in payload.model_dump(exclude_none=True).items():
             setattr(user, field, value)
+        db.commit()
+        db.refresh(user)
+        return user
+
+    @staticmethod
+    def admin_create(db: Session, payload: AdminUserCreate) -> UserModel:
+        existing = db.query(UserModel).filter(UserModel.email == payload.email).first()
+        if existing:
+            raise HTTPException(status_code=409, detail="Email already registered")
+
+        if payload.role_id is not None:
+            role = db.query(RoleModel).filter(RoleModel.id == payload.role_id).first()
+            if not role:
+                raise HTTPException(status_code=404, detail="Role not found")
+
+        if payload.account_type == "admin_account":
+            if payload.company_id is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail="company_id is required for admin_account",
+                )
+        elif payload.company_id is not None:
+            raise HTTPException(
+                status_code=400,
+                detail="company_id is only allowed for admin_account",
+            )
+
+        if payload.company_id is not None:
+            company = db.query(Company).filter(Company.id == payload.company_id).first()
+            if not company:
+                raise HTTPException(status_code=404, detail="Company not found")
+
+        if payload.client_id is not None:
+            client = db.query(Client).filter(Client.id == payload.client_id).first()
+            if not client:
+                raise HTTPException(status_code=404, detail="Client not found")
+
+        user = UserModel(
+            email=payload.email,
+            password=hash_password(payload.password),
+            first_name=payload.first_name,
+            middle_name=payload.middle_name,
+            last_name=payload.last_name,
+            username=payload.username,
+            phone_number=payload.phone_number,
+            profile_url=payload.profile_url,
+            account_type=payload.account_type,
+            role_id=payload.role_id,
+            company_id=payload.company_id
+            if payload.account_type == "admin_account"
+            else None,
+            client_id=payload.client_id,
+            is_blocked=payload.is_blocked,
+            allow_skip_mfa=payload.allow_skip_mfa,
+        )
+        db.add(user)
         db.commit()
         db.refresh(user)
         return user

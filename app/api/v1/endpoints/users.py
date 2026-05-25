@@ -6,7 +6,7 @@ from app.core.dependencies import get_current_user, require_admin
 from app.models.user import UserModel
 from app.services.user import UserService
 from app.schemas.user import (
-    UserRead, UserUpdate, AdminUserUpdate,
+    UserRead, UserUpdate, AdminUserUpdate, AdminUserCreate,
     PaginatedUsers, DeviceRead, SigninHistoryRead,
     ChangePasswordRequest,
 )
@@ -44,6 +44,11 @@ def list_users(
     search: str | None = Query(None),
 ):
     return UserService.get_all(db, page, page_size, account_type, is_blocked, search)
+
+@router.post("/", response_model=UserRead, status_code=status.HTTP_201_CREATED,
+             dependencies=[Depends(require_admin)])
+def create_user(payload: AdminUserCreate, db: Session = Depends(get_db)):
+    return UserService.admin_create(db, payload)
 
 @router.get("/{user_id}", response_model=UserRead, dependencies=[Depends(require_admin)])
 def get_user(user_id: int, db: Session = Depends(get_db)):

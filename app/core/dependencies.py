@@ -23,10 +23,10 @@ def get_current_user(
 
     return user
 
-ADMIN_TYPES = {"admin", "super_admin_account"}
+ADMIN_TYPES = {1, "super_admin_account"}
 
 def require_admin(current_user: UserModel = Depends(get_current_user)) -> UserModel:
-    if current_user.role not in ADMIN_TYPES:
+    if current_user.role_id not in ADMIN_TYPES:
         raise HTTPException(status_code=403, detail="Admin access required")
     return current_user
 

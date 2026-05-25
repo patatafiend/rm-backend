@@ -1,4 +1,5 @@
 from pydantic import BaseModel, EmailStr
+from typing import Literal
 from datetime import datetime
 
 class UserBase(BaseModel):
@@ -46,6 +47,27 @@ class AdminUserUpdate(UserUpdate):
     """Admin can also update role, account_type"""
     role_id: int | None = None
     account_type: str | None = None
+
+class AdminUserCreate(BaseModel):
+    email: EmailStr
+    password: str
+    first_name: str | None = None
+    middle_name: str | None = None
+    last_name: str | None = None
+    username: str | None = None
+    phone_number: str | None = None
+    profile_url: str | None = None
+    account_type: Literal[
+        "admin_account",
+        "user_account",
+        "super_admin_account",
+        "audit_account",
+    ]
+    role_id: int | None = None
+    company_id: int | None = None
+    client_id: int | None = None
+    is_blocked: bool = False
+    allow_skip_mfa: bool = False
 
 class ChangePasswordRequest(BaseModel):
     current_password: str
