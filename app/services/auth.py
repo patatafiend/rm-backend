@@ -3,6 +3,7 @@ import pyotp
 from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
+from app.utils.datetime import as_utc
 
 from app.core.config import settings
 from app.core.security import (
@@ -92,7 +93,7 @@ class AuthService:
         token_row = db.query(UserTokenModel).filter(
             UserTokenModel.token == refresh_token
         ).first()
-        if not token_row or token_row.expires_at < datetime.now(timezone.utc):
+        if not token_row or as_utc(token_row.expires_at) < datetime.now(timezone.utc):
             raise HTTPException(status_code=401, detail="Refresh token expired or revoked")
 
         user_id = int(payload["sub"])
@@ -146,7 +147,7 @@ class AuthService:
             ResetTokenModel.used == False,
         ).first()
 
-        if not reset or reset.expires_at < datetime.now(timezone.utc):
+        if not reset or as_utc(reset.expires_at) < datetime.now(timezone.utc):
             raise HTTPException(status_code=400, detail="Invalid or expired reset token")
 
         user = db.query(UserModel).filter(UserModel.id == reset.user_id).first()
@@ -185,7 +186,7 @@ class AuthService:
             MfaTokenModel.token == payload.mfa_token,
         ).first()
 
-        if not mfa_row or mfa_row.expires_at < datetime.now(timezone.utc):
+        if not mfa_row or as_utc(mfa_row.expires_at) < datetime.now(timezone.utc):
             raise HTTPException(status_code=401, detail="MFA token expired")
 
         user = db.query(UserModel).filter(UserModel.id == mfa_row.user_id).first()

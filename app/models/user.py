@@ -230,8 +230,8 @@ class UserTokenModel(Base):
         Integer, ForeignKey("user_devices.id", ondelete="CASCADE"), unique=True
     )
     token = Column(String(5000))
-    expires_at = Column(DateTime)
-    created_at = Column(DateTime, server_default=func.now())
+    expires_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     user: Mapped["UserModel"] = relationship(back_populates="tokens")
     device: Mapped["UserDeviceModel"] = relationship(back_populates="token")
@@ -245,8 +245,8 @@ class ResetTokenModel(Base):
     user_email = Column(String(255), nullable=False)
     token = Column(String(255), unique=True, nullable=False)
     used = Column(Boolean, default=False)
-    expires_at = Column(DateTime, nullable=False)
-    created_at = Column(DateTime, server_default=func.now())
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     user: Mapped["UserModel"] = relationship(back_populates="reset_tokens")
 
@@ -256,9 +256,8 @@ class MfaTokenModel(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
     token = Column(String(255), unique=True, nullable=False)
-    expires_at = Column(DateTime, nullable=False)
-    created_at = Column(DateTime, server_default=func.now())
-
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     user: Mapped["UserModel"] = relationship(back_populates="mfa_tokens")
 
