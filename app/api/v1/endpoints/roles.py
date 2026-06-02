@@ -36,7 +36,7 @@ def update_role(role_id: int, payload: RoleUpdate, db: Session = Depends(get_db)
     return RoleService.update(db, role_id, payload)
 
 @router.delete("/{role_id}", status_code=status.HTTP_204_NO_CONTENT,
-               dependencies=[Depends(require_super_admin)])
+               dependencies=[Depends(require_admin)])
 def delete_role(role_id: int, db: Session = Depends(get_db)):
     RoleService.delete(db, role_id)
 
