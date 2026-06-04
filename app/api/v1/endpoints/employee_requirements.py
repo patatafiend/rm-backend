@@ -6,6 +6,8 @@ from app.core.bu_permissions import BU_PERMISSION_MAP
 from app.models.user import UserModel, RolePermissionModel, PermissionModel
 from sqlalchemy.orm import Session
 from app.db.session import get_db
+from app.schemas.external import ExternalCaller
+from app.core.dependencies import get_current_caller
 
 router = APIRouter()
 EXTERNAL_API_URL = "https://cmiitdept.com/hr/api_onboarded_minor.php"
@@ -106,12 +108,15 @@ def get_employee_requirements(
     limit: int | None = Query(None, ge=1),
     offset: int | None = Query(None, ge=0),
     db: Session = Depends(get_db),
-    current_user: UserModel = Depends(get_current_user),
+    caller = Depends(get_current_caller),  # UserModel | ExternalCaller
 ):
-    if current_user.account_type == "admin_account":
-        allowed_bus = None
+    # Resolve allowed BUs based on caller type
+    if isinstance(caller, ExternalCaller):
+        allowed_bus = caller.allowed_bus  # already resolved in token
+    elif caller.account_type == "admin_account":
+        allowed_bus = None  # sees everything
     else:
-        allowed_bus = get_allowed_bus(current_user, db)
+        allowed_bus = get_allowed_bus(caller, db)
         if allowed_bus == []:
             return []
 
@@ -133,10 +138,10 @@ def get_employee_requirements(
         raw = response.json()
     except ValueError as exc:
         raise HTTPException(status_code=502, detail="Invalid external API response") from exc
-    
+
     if not isinstance(raw, dict) or "data" not in raw:
         raise HTTPException(status_code=502, detail="Unexpected external API response shape")
-    
+
     data: list[dict] = raw["data"]
 
     if allowed_bus is not None:
@@ -144,8 +149,8 @@ def get_employee_requirements(
 
     return {
         "status": "success",
-        "total": len(data),
-        "data": data,
+        "total":  len(data),
+        "data":   data,
     }
 
 

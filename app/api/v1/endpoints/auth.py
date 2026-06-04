@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Request, status, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -14,6 +14,10 @@ from app.schemas.auth import (
     MfaVerifyRequest, MfaDisableRequest,
 )
 from app.schemas.device import DeviceInfo
+from urllib.parse import urlparse
+from app.core.bu_permissions import BU_GROUP_MAP
+from app.core.security import create_external_access_token
+from app.models.user import AuthorizedDomainModel
 
 router = APIRouter()
 
@@ -96,3 +100,62 @@ def mfa_disable(
 ):
     AuthService.mfa_disable(db, current_user, payload)
     return {"message": "MFA disabled"}
+
+@router.get("/authorize")
+def authorize_external(
+    request: Request,
+    employee_id: str = Query(...),
+    bu_group: str = Query(...),
+    db: Session = Depends(get_db),
+):
+    # 1. Check origin/referer domain
+    origin   = request.headers.get("origin", "")
+    referer  = request.headers.get("referer", "")
+    raw      = origin or referer
+
+    if not raw:
+        raise HTTPException(status_code=403, detail="Missing origin")
+
+    incoming_domain = urlparse(raw).hostname or ""
+
+    allowed = (
+        db.query(AuthorizedDomainModel)
+        .filter(
+            AuthorizedDomainModel.is_active == True,
+        )
+        .all()
+    )
+
+    # Match exact domain or subdomain
+    is_allowed = any(
+        incoming_domain == d.domain or incoming_domain.endswith(f".{d.domain}")
+        for d in allowed
+    )
+
+    if not is_allowed:
+        raise HTTPException(status_code=403, detail="Domain not authorized")
+
+    # 2. Resolve bu_group → allowed_bus
+    allowed_bus = BU_GROUP_MAP.get(bu_group)
+    if not allowed_bus:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown bu_group '{bu_group}'. Valid: {list(BU_GROUP_MAP.keys())}"
+        )
+
+    # 3. Issue token
+    access_token = create_external_access_token(
+        employee_id=employee_id,
+        bu_group=bu_group,
+        allowed_bus=allowed_bus,
+    )
+
+    return {
+        "access_token": access_token,
+        "token_type":   "bearer",
+        "bu_group":     bu_group,
+        "allowed_bus":  allowed_bus,
+        "employee_id":  employee_id,
+    }
+
+
