@@ -54,4 +54,4 @@ def create_external_access_token(
         "type":        "external",
         "exp":         expire,
     }
-    return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.ALGORITHM)
