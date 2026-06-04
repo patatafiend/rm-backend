@@ -104,36 +104,11 @@ def mfa_disable(
 
 @router.get("/authorize")
 def authorize_external(
-    request: Request,
     employee_id: str = Query(...),
     bu_group: str = Query(...),
     db: Session = Depends(get_db),
 ):
-    # 1. Check origin/referer domain
-    origin  = request.headers.get("origin", "")
-    referer = request.headers.get("referer", "")
-    raw     = origin or referer
-
-    if not raw:
-        raise HTTPException(status_code=403, detail="Missing origin")
-
-    incoming_domain = urlparse(raw).hostname or ""
-
-    allowed = (
-        db.query(AuthorizedDomainModel)
-        .filter(AuthorizedDomainModel.is_active == True)
-        .all()
-    )
-
-    is_allowed = any(
-        incoming_domain == d.domain or incoming_domain.endswith(f".{d.domain}")
-        for d in allowed
-    )
-
-    if not is_allowed:
-        raise HTTPException(status_code=403, detail="Domain not authorized")
-
-    # 2. Resolve bu_group → allowed_bus
+    # Validate bu_group
     allowed_bus = BU_GROUP_MAP.get(bu_group)
     if not allowed_bus:
         raise HTTPException(
@@ -141,14 +116,14 @@ def authorize_external(
             detail=f"Unknown bu_group '{bu_group}'. Valid: {list(BU_GROUP_MAP.keys())}"
         )
 
-    # 3. Issue token
+    # Issue token
     access_token = create_external_access_token(
         employee_id=employee_id,
         bu_group=bu_group,
         allowed_bus=allowed_bus,
     )
 
-    # 4. Redirect to frontend with token in URL
+    # Redirect to frontend
     redirect_url = f"{settings.FRONTEND_URL}/auth/external?token={access_token}"
     return RedirectResponse(url=redirect_url, status_code=302)
 
