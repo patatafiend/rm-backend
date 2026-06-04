@@ -124,7 +124,7 @@ def authorize_external(
     )
 
     # Redirect to frontend
-    redirect_url = f"{settings.FRONTEND_URL}/auth/external?token={access_token}"
+    redirect_url = f"{settings.FRONTEND_URL}/external?token={access_token}"
     return RedirectResponse(url=redirect_url, status_code=302)
 
 
