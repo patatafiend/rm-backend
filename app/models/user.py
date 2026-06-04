@@ -301,3 +301,12 @@ class Client(Base):
 
     users: Mapped[List["UserModel"]] = relationship(back_populates="clients")
     company: Mapped["Company"] = relationship(back_populates="clients")
+
+class AuthorizedDomainModel(Base):
+    __tablename__ = "authorized_domains"
+
+    id          = Column(Integer, primary_key=True, index=True)
+    domain      = Column(String(255), unique=True, nullable=False)
+    description = Column(String(255), nullable=True)
+    is_active   = Column(Boolean, default=True)
+    created_at  = Column(DateTime(timezone=True), server_default=func.now())

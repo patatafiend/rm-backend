@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.core.security import decode_token
 from app.models.user import UserModel
+from app.schemas.external import ExternalCaller
 
 bearer = HTTPBearer()
 
@@ -34,3 +35,27 @@ def require_super_admin(current_user: UserModel = Depends(get_current_user)) -> 
     if current_user.account_type != "super_admin_account":
         raise HTTPException(status_code=403, detail="Super admin access required")
     return current_user
+
+def get_current_caller(
+    credentials: HTTPAuthorizationCredentials = Depends(bearer),
+    db: Session = Depends(get_db),
+) -> UserModel | ExternalCaller:
+    token = credentials.credentials
+    payload = decode_token(token, token_type="access")
+
+    if payload.get("type") == "external":
+        return ExternalCaller(
+            employee_id=payload["sub"],
+            bu_group=payload.get("bu_group", ""),
+            allowed_bus=payload.get("allowed_bus", []),
+        )
+
+    # Normal DB user
+    user_id = int(payload["sub"])
+    user = db.query(UserModel).filter(UserModel.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    if user.is_blocked:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is blocked")
+
+    return user

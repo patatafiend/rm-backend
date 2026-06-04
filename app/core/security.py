@@ -38,3 +38,20 @@ def decode_token(token: str, token_type: str | None = None) -> dict:
         raise HTTPException(status_code=401, detail="Token has expired")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
+    
+def create_external_access_token(
+    employee_id: str,
+    bu_group: str,
+    allowed_bus: list[str],
+) -> str:
+    expire = datetime.now(timezone.utc) + timedelta(
+        minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
+    )
+    payload = {
+        "sub":         employee_id,
+        "bu_group":    bu_group,
+        "allowed_bus": allowed_bus,
+        "type":        "external",
+        "exp":         expire,
+    }
+    return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
