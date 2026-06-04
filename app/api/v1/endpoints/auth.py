@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Request, status, HTTPException, Query
 from sqlalchemy.orm import Session
-
+from fastapi.responses import RedirectResponse
+from app.core.config import settings
 from app.db.session import get_db
 from app.core.dependencies import get_current_user
 from app.models.user import UserModel
@@ -109,9 +110,9 @@ def authorize_external(
     db: Session = Depends(get_db),
 ):
     # 1. Check origin/referer domain
-    origin   = request.headers.get("origin", "")
-    referer  = request.headers.get("referer", "")
-    raw      = origin or referer
+    origin  = request.headers.get("origin", "")
+    referer = request.headers.get("referer", "")
+    raw     = origin or referer
 
     if not raw:
         raise HTTPException(status_code=403, detail="Missing origin")
@@ -120,13 +121,10 @@ def authorize_external(
 
     allowed = (
         db.query(AuthorizedDomainModel)
-        .filter(
-            AuthorizedDomainModel.is_active == True,
-        )
+        .filter(AuthorizedDomainModel.is_active == True)
         .all()
     )
 
-    # Match exact domain or subdomain
     is_allowed = any(
         incoming_domain == d.domain or incoming_domain.endswith(f".{d.domain}")
         for d in allowed
@@ -150,12 +148,8 @@ def authorize_external(
         allowed_bus=allowed_bus,
     )
 
-    return {
-        "access_token": access_token,
-        "token_type":   "bearer",
-        "bu_group":     bu_group,
-        "allowed_bus":  allowed_bus,
-        "employee_id":  employee_id,
-    }
+    # 4. Redirect to frontend with token in URL
+    redirect_url = f"{settings.FRONTEND_URL}/auth/external?token={access_token}"
+    return RedirectResponse(url=redirect_url, status_code=302)
 
 
