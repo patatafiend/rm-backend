@@ -1,0 +1,62 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+dist/
+build/
+
+# Virtual Environments
+venv/
+.env/
+.venv/
+env/
+ENV/
+
+# Editor settings
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment variables
+.env
+*.env
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test coverage
+htmlcov/
+.coverage
+.tox/
+.cache/
+pytest_cache/
+
+# MyPy
+.mypy_cache/
+
+# Pydantic compiled schema cache
+__pydantic_schema_cache__/
+
+# Alembic
+migrations/versions/*.pyc
+
+# Docker
+*.pid
+*.pid.lock
+
+# Optional: If using Poetry
+poetry.lock
+
+# Optional: If using Pipenv
+Pipfile.lock
+run_server.ps1
+.env.production
