@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     FRONTEND_URL: str
     DATABASE_URL: str
 
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 480
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     ALGORITHM: str = "HS256"
     JWT_SECRET_KEY: str
@@ -32,5 +32,3 @@ def get_settings():
 
 
 settings = get_settings()
-
-print(settings.DATABASE_URL)
