@@ -113,6 +113,8 @@ def get_employee_requirements(
     # Resolve allowed BUs based on caller type
     if isinstance(caller, ExternalCaller):
         allowed_bus = caller.allowed_bus  # already resolved in token
+        if allowed_bus == []:
+            return []
     elif caller.account_type == "admin_account":
         allowed_bus = None  # sees everything
     else:
