@@ -41,7 +41,9 @@ def get_current_caller(
     db: Session = Depends(get_db),
 ) -> UserModel | ExternalCaller:
     token = credentials.credentials
-    payload = decode_token(token, token_type="access")
+    
+    # Decode without type check first so we can branch on type
+    payload = decode_token(token)  # ← no token_type argument
 
     if payload.get("type") == "external":
         return ExternalCaller(
@@ -50,7 +52,10 @@ def get_current_caller(
             allowed_bus=payload.get("allowed_bus", []),
         )
 
-    # Normal DB user
+    # For normal users, enforce access type
+    if payload.get("type") != "access":
+        raise HTTPException(status_code=401, detail="Invalid token type")
+
     user_id = int(payload["sub"])
     user = db.query(UserModel).filter(UserModel.id == user_id).first()
     if not user:
