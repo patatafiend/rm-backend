@@ -21,6 +21,7 @@ from app.schemas.auth import (
     MfaVerifyRequest, MfaDisableRequest,
 )
 from app.schemas.device import DeviceInfo
+from app.schemas.user import UserResponse
 
 
 class AuthService:
@@ -84,7 +85,7 @@ class AuthService:
         refresh = create_refresh_token(user.id)
         AuthService._upsert_device_token(db, user.id, device, refresh)
 
-        return {"access_token": access, "refresh_token": refresh, "mfa_required": False}
+        return {"access_token": access, "refresh_token": refresh, "mfa_required": False, "user": UserResponse.model_validate(user),}
 
     @staticmethod
     def refresh(db: Session, refresh_token: str) -> dict:
