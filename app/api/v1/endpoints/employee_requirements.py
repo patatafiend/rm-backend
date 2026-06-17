@@ -3,6 +3,7 @@ import httpx
 
 from app.core.dependencies import get_current_user
 from app.core.bu_permissions import BU_PERMISSION_MAP
+from app.core.requirements import UNIVERSAL_REQUIRED_REQS, COMPANY_SPECIFIC_REQS
 from app.models.user import UserModel, RolePermissionModel, PermissionModel
 from sqlalchemy.orm import Session
 from app.db.session import get_db
@@ -103,6 +104,49 @@ def compute_missing_major(employee: dict) -> list[str]:
     return missing
 
 
+def compute_missing_minor(employee: dict) -> list[str]:
+    """
+    Compute list of missing minor documents (universal + company-specific).
+    A requirement is considered provided if it appears in the minor_reqs field.
+    Returns list of human-readable labels for missing requirements.
+    
+    @param employee - Employee dict containing minor_reqs (semicolon-delimited string) and hr_company
+    @return List of missing requirement names, empty if all requirements are satisfied
+    """
+    missing = []
+    
+    # Parse minor_reqs from semicolon-delimited string into a set for fast lookup
+    minor_reqs_str = employee.get("minor_reqs", "") or ""
+    provided_set = set()
+    if minor_reqs_str:
+        provided_list = [r.strip() for r in minor_reqs_str.split(";")]
+        provided_set = set(req for req in provided_list if req)
+    
+    # Check universal requirements
+    for req in UNIVERSAL_REQUIRED_REQS:
+        if req not in provided_set:
+            missing.append(req)
+    
+    # Check company-specific requirements if company matches
+    company_name = employee.get("hr_company", "")
+    if company_name and company_name in COMPANY_SPECIFIC_REQS:
+        for req in COMPANY_SPECIFIC_REQS[company_name]:
+            if req not in provided_set and req not in missing:
+                missing.append(req)
+    
+    return missing
+
+
+def sanitize_employee_data(employee: dict) -> dict:
+    """
+    Remove sensitive personally identifiable information (PII) from employee record.
+    Removes: rm_sss_no, rm_pagibig_no, rm_phhealth
+    Returns a new dict with PII fields removed.
+    """
+    sensitive_fields = {"rm_sss_no", "rm_pagibig_no", "rm_phhealth"}
+    return {k: v for k, v in employee.items() if k not in sensitive_fields}
+
+
 @router.get("/employee-requirements")
 def get_employee_requirements(
     limit: int | None = Query(None, ge=1),
@@ -192,6 +236,51 @@ def get_employee_requirements_missing_major():
         if missing_major:
             employee["missing_major"] = missing_major
             filtered_data.append(employee)
+
+    return {
+        "status": "success",
+        "total": len(filtered_data),
+        "data": filtered_data,
+    }
+
+
+@router.get("/employee-requirements/missing-minor")
+def get_employee_requirements_missing_minor():
+    """
+    Internal service-to-service endpoint.
+    Returns employees missing at least one minor document (universal or company-specific).
+    No authentication or BU filtering required.
+    """
+    try:
+        response = httpx.get(EXTERNAL_API_URL, timeout=20.0)
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=502, detail="External API request failed") from exc
+
+    if response.status_code != 200:
+        raise HTTPException(status_code=502, detail="External API returned an error")
+
+    try:
+        raw = response.json()
+    except ValueError as exc:
+        raise HTTPException(status_code=502, detail="Invalid external API response") from exc
+
+    if not isinstance(raw, dict) or "data" not in raw:
+        raise HTTPException(status_code=502, detail="Unexpected external API response shape")
+
+    data: list[dict] = raw["data"]
+
+    # Apply filters and transformations
+    data = exclude_short_term(data)
+    data = deduplicate_employees(data)
+
+    # Filter to only employees with missing minor documents and add missing_minor field
+    filtered_data = []
+    for employee in data:
+        missing_minor = compute_missing_minor(employee)
+        if missing_minor:
+            employee["missing_minor"] = missing_minor
+            sanitized_employee = sanitize_employee_data(employee)
+            filtered_data.append(sanitized_employee)
 
     return {
         "status": "success",
