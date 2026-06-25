@@ -262,7 +262,7 @@ def get_time_metrics(
     result = {
         "meta": meta,
         "data": [metrics],
-        "note": "Only encode_date → admin_condate available; status transition timestamps absent.",
+        "note": "",
     }
     _cache_set(cache_key, result)
     return result
