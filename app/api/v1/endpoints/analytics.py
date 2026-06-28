@@ -148,15 +148,19 @@ def make_meta(df: pd.DataFrame) -> dict:
 @router.get("/status-counts")
 def get_status_counts(
     refresh: bool = Query(False),
+    bu: str | None = Query(None),
     _user: UserModel = Depends(get_current_user),
 ):
-    cache_key = f"status_counts:{refresh}"
+    cache_key = f"status_counts:{refresh}:{bu}"
     if not refresh:
         cached = _cache_get(cache_key)
         if cached is not None:
             return cached
 
     df = get_or_fetch_df(refresh)
+    if bu and not df.empty:
+        df = df[df["bu_tagging"] == bu]
+
     counts = df["rm_job_status"].value_counts().to_dict() if not df.empty else {}
     result = {
         "meta": make_meta(df),
@@ -169,15 +173,18 @@ def get_status_counts(
 @router.get("/funnel")
 def get_funnel(
     refresh: bool = Query(False),
+    bu: str | None = Query(None),
     _user: UserModel = Depends(get_current_user),
 ):
-    cache_key = f"funnel:{refresh}"
+    cache_key = f"funnel:{refresh}:{bu}"
     if not refresh:
         cached = _cache_get(cache_key)
         if cached is not None:
             return cached
 
     df = get_or_fetch_df(refresh)
+    if bu and not df.empty:
+        df = df[df["bu_tagging"] == bu]
 
     stages = []
     for status in FUNNEL_ORDER:
@@ -209,9 +216,10 @@ def get_funnel(
 @router.get("/time-metrics")
 def get_time_metrics(
     refresh: bool = Query(False),
+    bu: str | None = Query(None),
     _user: UserModel = Depends(get_current_user),
 ):
-    cache_key = f"time_metrics:{refresh}"
+    cache_key = f"time_metrics:{refresh}:{bu}"
     if not refresh:
         cached = _cache_get(cache_key)
         if cached is not None:
@@ -219,6 +227,9 @@ def get_time_metrics(
 
     df = get_or_fetch_df(refresh)
     meta = make_meta(df)
+
+    if bu and not df.empty:
+        df = df[df["bu_tagging"] == bu]
 
     if df.empty or "rm_encode_date" not in df.columns or "admin_condate" not in df.columns:
         result = {
@@ -272,9 +283,10 @@ def get_time_metrics(
 def get_weekly_trend(
     weeks: int = Query(12, ge=1, le=52),
     refresh: bool = Query(False),
+    bu: str | None = Query(None),
     _user: UserModel = Depends(get_current_user),
 ):
-    cache_key = f"weekly_trend:{weeks}:{refresh}"
+    cache_key = f"weekly_trend:{weeks}:{refresh}:{bu}"
     if not refresh:
         cached = _cache_get(cache_key)
         if cached is not None:
@@ -282,6 +294,9 @@ def get_weekly_trend(
 
     df = get_or_fetch_df(refresh)
     meta = make_meta(df)
+
+    if bu and not df.empty:
+        df = df[df["bu_tagging"] == bu]
 
     if df.empty or "rm_encode_date" not in df.columns:
         result = {"meta": meta, "data": []}
@@ -346,3 +361,20 @@ def get_raw(
     meta["offset"] = offset
 
     return {"meta": meta, "data": records}
+
+@router.get("/bu-list")
+def get_bu_list(
+    refresh: bool = Query(False),
+    _user: UserModel = Depends(get_current_user),
+):
+    cache_key = f"bu_list:{refresh}"
+    if not refresh:
+        cached = _cache_get(cache_key)
+        if cached is not None:
+            return cached
+
+    df = get_or_fetch_df(refresh)
+    bus = sorted(df["bu_tagging"].dropna().unique().tolist()) if not df.empty else []
+    result = {"data": bus}
+    _cache_set(cache_key, result)
+    return result
