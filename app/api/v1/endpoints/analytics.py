@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.core.dependencies import get_current_user
 from app.models.user import UserModel
+from app.core.dependencies import get_current_caller
 
 router = APIRouter()
 
@@ -149,7 +150,7 @@ def make_meta(df: pd.DataFrame) -> dict:
 def get_status_counts(
     refresh: bool = Query(False),
     bu: str | None = Query(None),
-    _user: UserModel = Depends(get_current_user),
+    _user = Depends(get_current_caller),
 ):
     cache_key = f"status_counts:{refresh}:{bu}"
     if not refresh:
@@ -174,7 +175,7 @@ def get_status_counts(
 def get_funnel(
     refresh: bool = Query(False),
     bu: str | None = Query(None),
-    _user: UserModel = Depends(get_current_user),
+    _user = Depends(get_current_caller),
 ):
     cache_key = f"funnel:{refresh}:{bu}"
     if not refresh:
@@ -217,7 +218,7 @@ def get_funnel(
 def get_time_metrics(
     refresh: bool = Query(False),
     bu: str | None = Query(None),
-    _user: UserModel = Depends(get_current_user),
+    _user = Depends(get_current_caller),
 ):
     cache_key = f"time_metrics:{refresh}:{bu}"
     if not refresh:
@@ -284,7 +285,7 @@ def get_weekly_trend(
     weeks: int = Query(12, ge=1, le=52),
     refresh: bool = Query(False),
     bu: str | None = Query(None),
-    _user: UserModel = Depends(get_current_user),
+    _user = Depends(get_current_caller),
 ):
     cache_key = f"weekly_trend:{weeks}:{refresh}:{bu}"
     if not refresh:
@@ -331,7 +332,7 @@ def get_raw(
     company: str | None = Query(None),
     status: str | None = Query(None),
     refresh: bool = Query(False),
-    _user: UserModel = Depends(get_current_user),
+    _user = Depends(get_current_caller),
 ):
     df = get_or_fetch_df(refresh)
     meta = make_meta(df)
@@ -365,7 +366,7 @@ def get_raw(
 @router.get("/bu-list")
 def get_bu_list(
     refresh: bool = Query(False),
-    _user: UserModel = Depends(get_current_user),
+    _user = Depends(get_current_caller),
 ):
     cache_key = f"bu_list:{refresh}"
     if not refresh:

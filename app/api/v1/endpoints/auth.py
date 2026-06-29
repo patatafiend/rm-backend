@@ -105,38 +105,46 @@ def mfa_disable(
 @router.get("/authorize")
 def authorize_external(
     employee_id: str = Query(...),
-    bu_group: str = Query(...),  # comma-separated: "MWFL,Delivery"
+    bu_group: str = Query(...),
+    system: str = Query("rm"),  # "rm" | "analytics"
     db: Session = Depends(get_db),
 ):
-    # Split and resolve multiple bu_groups
     groups = [g.strip() for g in bu_group.split(",")]
-    
     allowed_bus = []
     invalid_groups = []
-    
+
     for group in groups:
         bus = BU_GROUP_MAP.get(group)
         if not bus:
             invalid_groups.append(group)
         else:
             allowed_bus.extend(bus)
-    
+
     if invalid_groups:
         raise HTTPException(
             status_code=400,
             detail=f"Unknown bu_group(s): {invalid_groups}. Valid: {list(BU_GROUP_MAP.keys())}"
         )
 
-    # Deduplicate in case of overlap
     allowed_bus = list(set(allowed_bus))
+
+    VALID_SYSTEMS = {"rm", "analytics"}
+    if system not in VALID_SYSTEMS:
+        raise HTTPException(status_code=400, detail=f"Unknown system '{system}'. Valid: {list(VALID_SYSTEMS)}")
 
     access_token = create_external_access_token(
         employee_id=employee_id,
-        bu_group=bu_group,      # store original string
+        bu_group=bu_group,
         allowed_bus=allowed_bus,
     )
 
-    redirect_url = f"{settings.FRONTEND_URL}/external?token={access_token}"
+    # Route to the right frontend path based on system
+    route_map = {
+    "rm": "/external?redirect=/dashboard",
+    "analytics": "/external?redirect=/analytics",
+    }
+
+    redirect_url = f"{settings.FRONTEND_URL}{route_map[system]}&token={access_token}"
     return RedirectResponse(url=redirect_url, status_code=302)
 
 
