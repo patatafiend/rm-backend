@@ -106,7 +106,7 @@ def mfa_disable(
 def authorize_external(
     employee_id: str = Query(...),
     bu_group: str = Query(...),
-    system: str = Query("rm"),  # "rm" | "analytics"
+    system: str = Query("rm"),  # "rm" | "analytics" | "appraisal"
     db: Session = Depends(get_db),
 ):
     groups = [g.strip() for g in bu_group.split(",")]
@@ -128,7 +128,7 @@ def authorize_external(
 
     allowed_bus = list(set(allowed_bus))
 
-    VALID_SYSTEMS = {"rm", "analytics"}
+    VALID_SYSTEMS = {"rm", "analytics", "appraisals"}
     if system not in VALID_SYSTEMS:
         raise HTTPException(status_code=400, detail=f"Unknown system '{system}'. Valid: {list(VALID_SYSTEMS)}")
 
@@ -142,6 +142,7 @@ def authorize_external(
     route_map = {
     "rm": "/external?redirect=/dashboard",
     "analytics": "/external?redirect=/analytics",
+    "appraisals": "/external?redirect=/appraisals",
     }
 
     redirect_url = f"{settings.FRONTEND_URL}{route_map[system]}&token={access_token}"
