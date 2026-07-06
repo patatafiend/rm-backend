@@ -122,6 +122,12 @@ def serialize_appraisal_record(record: PerformanceAppraisalModel, employee: dict
         "fifth_month_decision": record.fifth_month_decision,
         "fifth_month_notified_at": record.fifth_month_notified_at.isoformat() if record.fifth_month_notified_at else None,
         "extension_until": record.extension_until.isoformat() if record.extension_until else None,
+        "third_month_appraisal_file_key": record.third_month_appraisal_file_key,
+        "third_month_decided_at": record.third_month_decided_at.isoformat() if record.third_month_decided_at else None,
+        "fifth_month_appraisal_file_key": record.fifth_month_appraisal_file_key,
+        "fifth_month_decided_at": record.fifth_month_decided_at.isoformat() if record.fifth_month_decided_at else None,
+        "extension_decided_at": record.extension_decided_at.isoformat() if record.extension_decided_at else None,
+        "confirmed_at": record.confirmed_at.isoformat() if record.confirmed_at else None,
         "extension_final_decision": record.extension_final_decision,
         "appraisal_status": record.appraisal_status,
         "failsafe_reason": record.failsafe_reason,
@@ -151,7 +157,9 @@ def get_appraisal_record(db: Session, rm_tran_no: int) -> PerformanceAppraisalMo
 
 
 def list_appraisal_records(db: Session, status: str | None = None) -> list[PerformanceAppraisalModel]:
-    query = db.query(PerformanceAppraisalModel)
+    query = db.query(PerformanceAppraisalModel).filter(
+        PerformanceAppraisalModel.third_month_notified_at.isnot(None)
+    )
 
     if status:
         query = query.filter(PerformanceAppraisalModel.appraisal_status == status)
@@ -251,6 +259,10 @@ def run_appraisal_cycle_job(db: Session) -> None:
         record = get_or_create_appraisal_record(db, employee)
         months = compute_calendar_months_since(record.contract_sdate)
         today = date.today()
+
+        if months < 3:
+            db.flush()
+            continue
 
         if record.sixth_month_check_date is None:
             record.sixth_month_check_date = add_months(record.contract_sdate, 6)

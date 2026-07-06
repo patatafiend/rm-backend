@@ -33,3 +33,6 @@ class ToDictMixin:
 
 class Base(DeclarativeBase, ToDictMixin):
     pass
+
+import app.models.user
+import app.models.appraisal

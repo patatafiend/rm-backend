@@ -33,6 +33,7 @@ router = APIRouter()
 def get_for_regularization(
 	db: Session = Depends(get_db),
 	current_user: UserModel = Depends(get_current_caller),
+	response_model=AppraisalListResponse
 ):
 	try:
 		employees = fetch_all_employees()

@@ -27,14 +27,23 @@ class AppraisalRecordRead(BaseModel):
     bu_tagging: str
     rm_pos_applied: str | None = None
     contract_sdate: date
+
     third_month_due_date: date | None = None
     third_month_decision: ThirdMonthDecision | None = None
+    third_month_appraisal_file_key: str | None = None   # needed for drawer download link
+    third_month_decided_at: datetime | None = None       # needed for history timeline
     third_month_notified_at: datetime | None = None
+
     fifth_month_due_date: date | None = None
     fifth_month_decision: FifthMonthDecision | None = None
+    fifth_month_appraisal_file_key: str | None = None   # needed for drawer download link
+    fifth_month_decided_at: datetime | None = None       # needed for history timeline
     fifth_month_notified_at: datetime | None = None
+
     extension_until: date | None = None
     extension_final_decision: ExtensionDecision | None = None
+    extension_decided_at: datetime | None = None         # needed for history timeline
+
     appraisal_status: AppraisalStatus
     failsafe_reason: Literal[
         "NO_3RD_MONTH_APPRAISAL",
@@ -42,6 +51,7 @@ class AppraisalRecordRead(BaseModel):
         "EXTENSION_UNRESOLVED",
     ] | None = None
     failsafe_triggered_at: datetime | None = None
+    confirmed_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 
