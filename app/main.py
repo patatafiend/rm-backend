@@ -1,9 +1,45 @@
+from contextlib import asynccontextmanager
+
 from app.core.config import settings
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
-app = FastAPI()
+from apscheduler.schedulers.background import BackgroundScheduler
+
 from app.api.v1.router import api_router
+from app.db.session import SessionLocal
+from app.services.appraisal import run_appraisal_cycle_job
+
+scheduler = BackgroundScheduler()
+
+
+def run_appraisal_cycle():
+    db = SessionLocal()
+    try:
+        run_appraisal_cycle_job(db)
+    finally:
+        db.close()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # startup
+    scheduler.add_job(
+        run_appraisal_cycle,
+        trigger="interval",
+        seconds=30,
+        id="appraisal_cycle_job",
+        replace_existing=True,
+    )
+    scheduler.start()
+
+    yield
+
+    # shutdown
+    scheduler.shutdown()
+
+
+app = FastAPI(lifespan=lifespan)
 
 origins = [settings.FRONTEND_URL]
 
@@ -16,6 +52,7 @@ app.add_middleware(
 )
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
+
 
 @app.get("/")
 def hello():

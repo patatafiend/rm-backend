@@ -6,8 +6,10 @@ from typing import Any
 import httpx
 from dateutil.relativedelta import relativedelta
 from sqlalchemy.orm import Session
-
+from app.core.s3 import get_s3_client
+from app.core.config import settings
 from app.models.appraisal import NotificationModel, PerformanceAppraisalModel
+from uuid import uuid4
 
 EXTERNAL_API_URL = "https://cmiitdept.com/hr/api_onboarded_minor.php"
 ELIGIBLE_STATUSES = {"PROBATIONARY"}
@@ -108,6 +110,12 @@ def build_employee_name(employee: dict) -> str:
     ]
     return " ".join(part for part in parts if part)
 
+def _iso_utc(value: datetime | None) -> str | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.isoformat()
 
 def serialize_appraisal_record(record: PerformanceAppraisalModel, employee: dict | None = None) -> dict:
     payload = {
@@ -123,9 +131,9 @@ def serialize_appraisal_record(record: PerformanceAppraisalModel, employee: dict
         "fifth_month_notified_at": record.fifth_month_notified_at.isoformat() if record.fifth_month_notified_at else None,
         "extension_until": record.extension_until.isoformat() if record.extension_until else None,
         "third_month_appraisal_file_key": record.third_month_appraisal_file_key,
-        "third_month_decided_at": record.third_month_decided_at.isoformat() if record.third_month_decided_at else None,
+        "third_month_decided_at": _iso_utc(record.third_month_decided_at),
         "fifth_month_appraisal_file_key": record.fifth_month_appraisal_file_key,
-        "fifth_month_decided_at": record.fifth_month_decided_at.isoformat() if record.fifth_month_decided_at else None,
+        "fifth_month_decided_at": _iso_utc(record.fifth_month_decided_at),
         "extension_decided_at": record.extension_decided_at.isoformat() if record.extension_decided_at else None,
         "confirmed_at": record.confirmed_at.isoformat() if record.confirmed_at else None,
         "extension_final_decision": record.extension_final_decision,
@@ -236,10 +244,46 @@ def submit_extension_decision(
     return record
 
 
-def build_upload_placeholder(record: PerformanceAppraisalModel, suffix: str) -> tuple[str, str]:
-    file_key = f"appraisals/{record.rm_tran_no}/{suffix}"
-    upload_url = ""
+def build_upload_url(record, category: str, content_type: str) -> tuple[str, str]:
+    file_key = (
+        f"uploads/{settings.ENV}/appraisals/{record.rm_tran_no}/"
+        f"{category}/{uuid4()}{_extension_for(content_type)}"
+    )
+    client = get_s3_client()
+    upload_url = client.generate_presigned_url(
+        ClientMethod="put_object",
+        Params={
+            "Bucket": settings.S3_BUCKET_NAME,
+            "Key": file_key,
+            "ContentType": content_type,
+        },
+        ExpiresIn=settings.S3_PRESIGNED_URL_EXPIRY,
+    )
     return upload_url, file_key
+
+
+_EXTENSIONS = {
+    "application/pdf": ".pdf",
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+}
+
+def _extension_for(content_type: str) -> str:
+    try:
+        return _EXTENSIONS[content_type]
+    except KeyError:
+        raise ValueError(f"Unsupported content type: {content_type}")
+
+def build_download_url(file_key: str) -> str:
+    client = get_s3_client()
+    return client.generate_presigned_url(
+        ClientMethod="get_object",
+        Params={
+            "Bucket": settings.S3_BUCKET_NAME,
+            "Key": file_key,
+        },
+        ExpiresIn=settings.S3_PRESIGNED_URL_EXPIRY,
+    )
 
 
 def run_appraisal_cycle_job(db: Session) -> None:

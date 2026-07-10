@@ -15,7 +15,8 @@ from app.schemas.appraisal import (
 	UploadUrlResponse,
 )
 from app.services.appraisal import (
-	build_upload_placeholder,
+	build_upload_url,
+	build_download_url,
 	fetch_all_employees,
 	get_appraisal_record,
 	list_appraisal_records,
@@ -32,7 +33,6 @@ router = APIRouter()
 @router.get("/for-regularization")
 def get_for_regularization(
 	db: Session = Depends(get_db),
-	current_user: UserModel = Depends(get_current_caller),
 	response_model=AppraisalListResponse
 ):
 	try:
@@ -167,29 +167,36 @@ def submit_extension(
 	return serialize_appraisal_record(record)
 
 
-@router.post("/{rm_tran_no}/upload-url", response_model=UploadUrlResponse, status_code=status.HTTP_501_NOT_IMPLEMENTED)
+
+@router.post("/{rm_tran_no}/upload-url", response_model=UploadUrlResponse)
 def get_upload_url(
-	rm_tran_no: int,
-	db: Session = Depends(get_db),
-	current_user: UserModel = Depends(get_current_caller),
+    rm_tran_no: int,
+    content_type: str = Query("application/pdf"),
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_caller),
 ):
-	record = get_appraisal_record(db, rm_tran_no)
-	if record is None:
-		raise HTTPException(status_code=404, detail="Appraisal record not found")
+    record = get_appraisal_record(db, rm_tran_no)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Appraisal record not found")
 
-	upload_url, file_key = build_upload_placeholder(record, "appraisal-file")
-	raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Upload storage is not configured yet")
+    ALLOWED_CONTENT_TYPES = {"application/pdf", "image/jpeg", "image/png"}
+    if content_type not in ALLOWED_CONTENT_TYPES:
+        raise HTTPException(status_code=400, detail="Unsupported file type")
+
+    upload_url, file_key = build_upload_url(record, "appraisal-file", content_type=content_type)
+    return {"upload_url": upload_url, "file_key": file_key}
 
 
-@router.get("/{rm_tran_no}/files/{file_key}/download-url", response_model=DownloadUrlResponse, status_code=status.HTTP_501_NOT_IMPLEMENTED)
+@router.get("/{rm_tran_no}/files/{file_key:path}/download-url", response_model=DownloadUrlResponse)
 def get_download_url(
-	rm_tran_no: int,
-	file_key: str,
-	db: Session = Depends(get_db),
-	current_user: UserModel = Depends(get_current_caller),
+    rm_tran_no: int,
+    file_key: str,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_caller),
 ):
-	record = get_appraisal_record(db, rm_tran_no)
-	if record is None:
-		raise HTTPException(status_code=404, detail="Appraisal record not found")
+    record = get_appraisal_record(db, rm_tran_no)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Appraisal record not found")
 
-	raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Download storage is not configured yet")
+    download_url = build_download_url(file_key)
+    return {"download_url": download_url}

@@ -17,6 +17,11 @@ class Settings(BaseSettings):
     JWT_REFRESH_SECRET_KEY: str
     JWT_PASSWORD_RESET_SECRET_KEY: str
     JWT_MFA_SECRET_KEY: str
+    AWS_REGION: str = "ap-southeast-1"
+    AWS_ACCESS_KEY_ID: str
+    AWS_SECRET_ACCESS_KEY: str
+    S3_BUCKET_NAME: str
+    S3_PRESIGNED_URL_EXPIRY: int = 300
 
     model_config = {
         "env_file": ".env",
