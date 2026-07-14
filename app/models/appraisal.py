@@ -10,7 +10,7 @@ from sqlalchemy import (
     String,
     func,
 )
-
+from sqlalchemy.orm import relationship
 from app.db.base import Base
 
 
@@ -45,13 +45,6 @@ class PerformanceAppraisalModel(Base):
     fifth_month_appraisal_file_key = Column(String(1024))
     fifth_month_decided_at = Column(DateTime(timezone=True))
     fifth_month_decided_by = Column(Integer, ForeignKey("users.id"))
-
-    extension_until = Column(Date)
-    extension_final_decision = Column(
-        Enum("REGULARIZATION", "NON_REGULARIZATION", name="extension_final_decision")
-    )
-    extension_decided_at = Column(DateTime(timezone=True))
-    extension_decided_by = Column(Integer, ForeignKey("users.id"))
 
     sixth_month_check_date = Column(Date)
     failsafe_triggered = Column(Boolean, default=False)
@@ -97,6 +90,13 @@ class PerformanceAppraisalModel(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
+    extension_records = relationship(
+    "ExtensionRecordModel",
+    back_populates="appraisal",
+    order_by="ExtensionRecordModel.sequence",
+    cascade="all, delete-orphan",
+)
+
 
 class NotificationModel(Base):
     __tablename__ = "notifications"
@@ -109,3 +109,23 @@ class NotificationModel(Base):
     message = Column(String(1000), nullable=False)
     read_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class ExtensionRecordModel(Base):
+    __tablename__ = "extension_records"
+
+    id = Column(Integer, primary_key=True)
+    appraisal_id = Column(Integer, ForeignKey("performance_appraisals.id"), nullable=False, index=True)
+    sequence = Column(Integer, nullable=False)  # 1 = first extension, 2 = second, etc.
+
+    extension_until = Column(Date, nullable=False)
+    granted_at = Column(DateTime(timezone=True), server_default=func.now())
+    granted_by = Column(Integer, ForeignKey("users.id"))
+
+    decision = Column(
+        Enum("REGULARIZATION", "NON_REGULARIZATION", "EXTENSION", name="extension_record_decision")
+    )
+    appraisal_file_key = Column(String(1024))
+    decided_at = Column(DateTime(timezone=True))
+    decided_by = Column(Integer, ForeignKey("users.id"))
+
+    appraisal = relationship("PerformanceAppraisalModel", back_populates="extension_records")
