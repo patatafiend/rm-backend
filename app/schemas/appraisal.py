@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 
 AppraisalStatus = Literal[
@@ -15,7 +15,19 @@ AppraisalStatus = Literal[
 
 ThirdMonthDecision = Literal["PROCEED_5TH", "NON_REGULARIZATION"]
 FifthMonthDecision = Literal["REGULARIZATION", "NON_REGULARIZATION", "EXTENSION"]
-ExtensionDecision = Literal["REGULARIZATION", "NON_REGULARIZATION"]
+ExtensionDecision = Literal["REGULARIZATION", "NON_REGULARIZATION", "EXTENSION"]
+
+
+class ExtensionRecordRead(BaseModel):
+    id: int
+    sequence: int
+    extension_until: date | None = None
+    granted_at: datetime | None = None
+    decision: ExtensionDecision | None = None
+    appraisal_file_key: str | None = None
+    decided_at: datetime | None = None
+
+    model_config = {"from_attributes": True}
 
 
 class AppraisalRecordRead(BaseModel):
@@ -40,9 +52,7 @@ class AppraisalRecordRead(BaseModel):
     fifth_month_decided_at: datetime | None = None       # needed for history timeline
     fifth_month_notified_at: datetime | None = None
 
-    extension_until: date | None = None
-    extension_final_decision: ExtensionDecision | None = None
-    extension_decided_at: datetime | None = None         # needed for history timeline
+    extension_records: list[ExtensionRecordRead] = []
 
     appraisal_status: AppraisalStatus
     failsafe_reason: Literal[
@@ -69,12 +79,22 @@ class ThirdMonthSubmissionPayload(BaseModel):
 
 class FifthMonthSubmissionPayload(BaseModel):
     decision: FifthMonthDecision
-    appraisal_file_key: str
+    appraisal_file_key: str | None = None
     extension_until: date | None = None
 
 
 class ExtensionDecisionPayload(BaseModel):
     decision: ExtensionDecision
+    appraisal_file_key: str | None = None
+    extension_until: date | None = None
+
+    @model_validator(mode="after")
+    def validate_fields_for_decision(self) -> "ExtensionDecisionPayload":
+        if self.decision == "EXTENSION" and self.extension_until is None:
+            raise ValueError("extension_until is required when decision is EXTENSION")
+        if self.decision != "EXTENSION" and not self.appraisal_file_key:
+            raise ValueError("appraisal_file_key is required for a final decision")
+        return self
 
 
 class UploadUrlResponse(BaseModel):
