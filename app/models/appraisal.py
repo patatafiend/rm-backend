@@ -115,7 +115,7 @@ class ExtensionRecordModel(Base):
 
     id = Column(Integer, primary_key=True)
     appraisal_id = Column(Integer, ForeignKey("performance_appraisals.id"), nullable=False, index=True)
-    sequence = Column(Integer, nullable=False)  # 1 = first extension, 2 = second, etc.
+    sequence = Column(Integer, nullable=False)
 
     extension_until = Column(Date, nullable=False)
     granted_at = Column(DateTime(timezone=True), server_default=func.now())
