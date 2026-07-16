@@ -44,7 +44,7 @@ def get_for_regularization(
 
 	records = (
 		db.query(PerformanceAppraisalModel)
-		.filter(PerformanceAppraisalModel.appraisal_status == "FOR_REGULARIZATION")
+		.filter(PerformanceAppraisalModel.appraisal_status == "REGULARIZED")
 		.order_by(PerformanceAppraisalModel.id.asc())
 		.all()
 	)
@@ -147,24 +147,26 @@ def submit_fifth_month(
 
 @router.post("/{rm_tran_no}/extension-decision", response_model=AppraisalRecordRead)
 def submit_extension(
-	rm_tran_no: int,
-	payload: ExtensionDecisionPayload,
-	db: Session = Depends(get_db),
-	current_user: UserModel = Depends(get_current_caller),
+    rm_tran_no: int,
+    payload: ExtensionDecisionPayload,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_caller),
 ):
-	record = get_appraisal_record(db, rm_tran_no)
-	if record is None:
-		raise HTTPException(status_code=404, detail="Appraisal record not found")
+    record = get_appraisal_record(db, rm_tran_no)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Appraisal record not found")
 
-	submit_extension_decision(
-		db,
-		record,
-		decision=payload.decision,
-		user_id=current_user.id,
-	)
-	db.commit()
-	db.refresh(record)
-	return serialize_appraisal_record(record)
+    submit_extension_decision(
+        db,
+        record,
+        decision=payload.decision,
+        appraisal_file_key=payload.appraisal_file_key,
+        extension_until=payload.extension_until,
+        user_id=current_user.id,
+    )
+    db.commit()
+    db.refresh(record)
+    return serialize_appraisal_record(record)
 
 
 
@@ -183,7 +185,7 @@ def get_upload_url(
     if content_type not in ALLOWED_CONTENT_TYPES:
         raise HTTPException(status_code=400, detail="Unsupported file type")
 
-    upload_url, file_key = build_upload_url(record, "appraisal-file", content_type=content_type)
+    upload_url, file_key = build_upload_url(record, "appraisal-file")
     return {"upload_url": upload_url, "file_key": file_key}
 
 
@@ -200,3 +202,4 @@ def get_download_url(
 
     download_url = build_download_url(file_key)
     return {"download_url": download_url}
+

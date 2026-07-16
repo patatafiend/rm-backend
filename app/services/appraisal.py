@@ -8,7 +8,7 @@ from dateutil.relativedelta import relativedelta
 from sqlalchemy.orm import Session
 from app.core.s3 import get_s3_client
 from app.core.config import settings
-from app.models.appraisal import NotificationModel, PerformanceAppraisalModel
+from app.models.appraisal import NotificationModel, PerformanceAppraisalModel, ExtensionRecordModel
 from uuid import uuid4
 
 EXTERNAL_API_URL = "https://cmiitdept.com/hr/api_onboarded_minor.php"
@@ -129,17 +129,15 @@ def serialize_appraisal_record(record: PerformanceAppraisalModel, employee: dict
         "fifth_month_due_date": record.fifth_month_due_date.isoformat() if record.fifth_month_due_date else None,
         "fifth_month_decision": record.fifth_month_decision,
         "fifth_month_notified_at": record.fifth_month_notified_at.isoformat() if record.fifth_month_notified_at else None,
-        "extension_until": record.extension_until.isoformat() if record.extension_until else None,
         "third_month_appraisal_file_key": record.third_month_appraisal_file_key,
         "third_month_decided_at": _iso_utc(record.third_month_decided_at),
         "fifth_month_appraisal_file_key": record.fifth_month_appraisal_file_key,
         "fifth_month_decided_at": _iso_utc(record.fifth_month_decided_at),
-        "extension_decided_at": record.extension_decided_at.isoformat() if record.extension_decided_at else None,
         "confirmed_at": record.confirmed_at.isoformat() if record.confirmed_at else None,
-        "extension_final_decision": record.extension_final_decision,
         "appraisal_status": record.appraisal_status,
         "failsafe_reason": record.failsafe_reason,
         "failsafe_triggered_at": record.failsafe_triggered_at.isoformat() if record.failsafe_triggered_at else None,
+        "extension_records":[serialize_extension_record(e) for e in record.extension_records],
     }
 
     if employee:
@@ -187,6 +185,7 @@ def submit_third_month_decision(
     record.third_month_appraisal_file_key = appraisal_file_key
     record.third_month_decided_by = user_id
     record.third_month_decided_at = now()
+    record.appraisal_status = "FOR_REGULARIZATION"
 
     if decision == "NON_REGULARIZATION":
         record.appraisal_status = "NON_REGULARIZED"
@@ -201,7 +200,7 @@ def submit_fifth_month_decision(
     record: PerformanceAppraisalModel,
     *,
     decision: str,
-    appraisal_file_key: str,
+    appraisal_file_key: str | None = None,
     user_id: int,
     extension_until: date | None = None,
 ) -> PerformanceAppraisalModel:
@@ -211,7 +210,7 @@ def submit_fifth_month_decision(
     record.fifth_month_decided_at = now()
 
     if decision == "EXTENSION":
-        record.extension_until = extension_until
+        create_extension_record(db, record, extension_until=extension_until, granted_by=user_id)
     elif decision == "REGULARIZATION":
         record.appraisal_status = "REGULARIZED"
         record.confirmed_at = now()
@@ -229,25 +228,37 @@ def submit_extension_decision(
     *,
     decision: str,
     user_id: int,
+    appraisal_file_key: str | None = None,
+    extension_until: date | None = None,
 ) -> PerformanceAppraisalModel:
-    record.extension_final_decision = decision
-    record.extension_decided_by = user_id
-    record.extension_decided_at = now()
+    latest = get_latest_extension_record(db, record.id)
+    if latest is None:
+        raise ValueError("No active extension record found for this appraisal")
 
-    if decision == "REGULARIZATION":
+    latest.decision = decision
+    latest.appraisal_file_key = appraisal_file_key
+    latest.decided_by = user_id
+    latest.decided_at = now()
+
+    if decision == "EXTENSION":
+        if extension_until is None:
+            raise ValueError("extension_until is required when extending again")
+        create_extension_record(db, record, extension_until=extension_until, granted_by=user_id)
+    elif decision == "REGULARIZATION":
         record.appraisal_status = "REGULARIZED"
+        record.confirmed_at = now()
     else:
         record.appraisal_status = "NON_REGULARIZED"
+        record.confirmed_at = now()
 
-    record.confirmed_at = now()
     db.flush()
     return record
 
 
-def build_upload_url(record, category: str, content_type: str) -> tuple[str, str]:
+def build_upload_url(record, category: str) -> tuple[str, str]:
     file_key = (
         f"uploads/{settings.ENV}/appraisals/{record.rm_tran_no}/"
-        f"{category}/{uuid4()}{_extension_for(content_type)}"
+        f"{category}/{uuid4()}"
     )
     client = get_s3_client()
     upload_url = client.generate_presigned_url(
@@ -255,7 +266,6 @@ def build_upload_url(record, category: str, content_type: str) -> tuple[str, str
         Params={
             "Bucket": settings.S3_BUCKET_NAME,
             "Key": file_key,
-            "ContentType": content_type,
         },
         ExpiresIn=settings.S3_PRESIGNED_URL_EXPIRY,
     )
@@ -353,33 +363,34 @@ def run_appraisal_cycle_job(db: Session) -> None:
                 message="Fifth month appraisal is due.",
             )
 
-        if (
-            record.fifth_month_decision == "EXTENSION"
-            and record.extension_until
-            and today >= record.extension_until
-            and record.extension_final_decision is None
-            and record.appraisal_status == "PENDING"
-        ):
-            record.appraisal_status = "FOR_REGULARIZATION"
-            record.failsafe_triggered = True
-            record.failsafe_triggered_at = now()
-            record.failsafe_reason = "EXTENSION_UNRESOLVED"
-            create_notification(
-                db,
-                recipient_type="BU_GROUP",
-                recipient_value=record.bu_tagging,
-                milestone="NON_COMPLIANCE_EXTENSION_UNRESOLVED_AUTO_REGULARIZED",
-                rm_tran_no=record.rm_tran_no,
-                message="Extension window elapsed without a final decision.",
-            )
-            create_notification(
-                db,
-                recipient_type="ROLE",
-                recipient_value="HRBP",
-                milestone="NON_COMPLIANCE_EXTENSION_UNRESOLVED_AUTO_REGULARIZED",
-                rm_tran_no=record.rm_tran_no,
-                message="Extension window elapsed without a final decision.",
-            )
+        if record.fifth_month_decision == "EXTENSION" and record.appraisal_status == "PENDING":
+            latest_ext = get_latest_extension_record(db, record.id)
+            if (
+                latest_ext is not None
+                and latest_ext.extension_until
+                and today >= latest_ext.extension_until
+                and latest_ext.decision is None
+            ):
+                record.appraisal_status = "FOR_REGULARIZATION"
+                record.failsafe_triggered = True
+                record.failsafe_triggered_at = now()
+                record.failsafe_reason = "EXTENSION_UNRESOLVED"
+                create_notification(
+                    db,
+                    recipient_type="BU_GROUP",
+                    recipient_value=record.bu_tagging,
+                    milestone="NON_COMPLIANCE_EXTENSION_UNRESOLVED_AUTO_REGULARIZED",
+                    rm_tran_no=record.rm_tran_no,
+                    message="Extension window elapsed without a final decision.",
+                )
+                create_notification(
+                    db,
+                    recipient_type="ROLE",
+                    recipient_value="HRBP",
+                    milestone="NON_COMPLIANCE_EXTENSION_UNRESOLVED_AUTO_REGULARIZED",
+                    rm_tran_no=record.rm_tran_no,
+                    message="Extension window elapsed without a final decision.",
+                )
 
         if months >= 6 and record.appraisal_status == "PENDING" and record.fifth_month_decision is None:
             record.appraisal_status = "FOR_REGULARIZATION"
@@ -427,7 +438,49 @@ def reconcile_resolved_employees(db: Session, by_tran_no: dict[int, dict]) -> No
 
         status = str(employee.get("emp_status", "")).strip().upper()
         if status == "REGULAR":
-            record.appraisal_status = "REGULARIZED"
+            record.appraisal_status = "FOR_REGULARIZATION"
             record.confirmed_at = now()
         elif status not in ELIGIBLE_STATUSES:
             record.appraisal_status = "NEEDS_REVIEW"
+
+def create_extension_record(
+    db: Session,
+    record: PerformanceAppraisalModel,
+    *,
+    extension_until: date,
+    granted_by: int | None = None,
+) -> ExtensionRecordModel:
+    existing_count = (
+        db.query(ExtensionRecordModel)
+        .filter(ExtensionRecordModel.appraisal_id == record.id)
+        .count()
+    )
+    extension = ExtensionRecordModel(
+        appraisal_id=record.id,
+        sequence=existing_count + 1,
+        extension_until=extension_until,
+        granted_by=granted_by,
+    )
+    db.add(extension)
+    db.flush()
+    return extension
+
+
+def get_latest_extension_record(db: Session, appraisal_id: int) -> ExtensionRecordModel | None:
+    return (
+        db.query(ExtensionRecordModel)
+        .filter(ExtensionRecordModel.appraisal_id == appraisal_id)
+        .order_by(ExtensionRecordModel.sequence.desc())
+        .first()
+    )
+
+def serialize_extension_record(ext: ExtensionRecordModel) -> dict:
+    return {
+        "id": ext.id,
+        "sequence": ext.sequence,
+        "extension_until": ext.extension_until.isoformat() if ext.extension_until else None,
+        "granted_at": _iso_utc(ext.granted_at),
+        "decision": ext.decision,
+        "appraisal_file_key": ext.appraisal_file_key,
+        "decided_at": _iso_utc(ext.decided_at),
+    }
