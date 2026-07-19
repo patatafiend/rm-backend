@@ -8,7 +8,7 @@ from dateutil.relativedelta import relativedelta
 from sqlalchemy.orm import Session
 from app.core.s3 import get_s3_client
 from app.core.config import settings
-from app.models.appraisal import NotificationModel, PerformanceAppraisalModel, ExtensionRecordModel
+from app.models.appraisal import NotificationModel, PerformanceAppraisalModel, ExtensionRecordModel, ActivityLogModel
 from uuid import uuid4
 
 EXTERNAL_API_URL = "https://cmiitdept.com/hr/api_onboarded_minor.php"
@@ -163,14 +163,18 @@ def get_appraisal_record(db: Session, rm_tran_no: int) -> PerformanceAppraisalMo
     return db.query(PerformanceAppraisalModel).filter(PerformanceAppraisalModel.rm_tran_no == rm_tran_no).first()
 
 
-def list_appraisal_records(db: Session, status: str | None = None) -> list[PerformanceAppraisalModel]:
+def list_appraisal_records(
+    db: Session,
+    status: str | None = None,
+    allowed_bus: list[str] | None = None,
+) -> list[PerformanceAppraisalModel]:
     query = db.query(PerformanceAppraisalModel).filter(
         PerformanceAppraisalModel.third_month_notified_at.isnot(None)
     )
-
     if status:
         query = query.filter(PerformanceAppraisalModel.appraisal_status == status)
-
+    if allowed_bus is not None:
+        query = query.filter(PerformanceAppraisalModel.bu_tagging.in_(allowed_bus))
     return query.order_by(PerformanceAppraisalModel.id.asc()).all()
 
 
@@ -397,7 +401,7 @@ def run_appraisal_cycle_job(db: Session) -> None:
                 )
 
         if months >= 6 and record.appraisal_status == "PENDING" and record.fifth_month_decision is None:
-            record.appraisal_status = "FOR_REGULARIZATION"
+            record.appraisal_status = "REGULARIZED"
             record.failsafe_triggered = True
             record.failsafe_triggered_at = now()
             record.fifth_month_decision = "NO_APPRAISAL"
@@ -492,3 +496,26 @@ def serialize_extension_record(ext: ExtensionRecordModel) -> dict:
         "appraisal_file_key": ext.appraisal_file_key,
         "decided_at": _iso_utc(ext.decided_at),
     }
+
+def log_activity(
+    db: Session,
+    *,
+    rm_tran_no: int,
+    action: str,
+    status: str,
+    actor_type: str,
+    actor_id: str,
+    bu_group: str | None = None,
+    detail: dict | None = None,
+) -> ActivityLogModel:
+    entry = ActivityLogModel(
+        rm_tran_no=rm_tran_no,
+        action=action,
+        status=status,
+        actor_type=actor_type,
+        actor_id=actor_id,
+        bu_group=bu_group,
+        detail=detail or {},
+    )
+    db.add(entry)
+    return entry

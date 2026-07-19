@@ -114,7 +114,7 @@ def authorize_external(
     invalid_groups = []
 
     for group in groups:
-        bus = BU_GROUP_MAP.get(group)
+        bus = BU_GROUP_MAP.get(group.strip().lower())
         if not bus:
             invalid_groups.append(group)
         else:

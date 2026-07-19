@@ -13,8 +13,8 @@ AppraisalStatus = Literal[
     "RESOLVED_MANUAL",
 ]
 
-ThirdMonthDecision = Literal["PROCEED_5TH", "NON_REGULARIZATION"]
-FifthMonthDecision = Literal["REGULARIZATION", "NON_REGULARIZATION", "EXTENSION"]
+ThirdMonthDecision = Literal["PROCEED_5TH", "NON_REGULARIZATION", "NO_APPRAISAL"]
+FifthMonthDecision = Literal["REGULARIZATION", "NON_REGULARIZATION", "EXTENSION", "NO_APPRAISAL"]
 ExtensionDecision = Literal["REGULARIZATION", "NON_REGULARIZATION", "EXTENSION"]
 
 
@@ -48,9 +48,10 @@ class AppraisalRecordRead(BaseModel):
 
     fifth_month_due_date: date | None = None
     fifth_month_decision: FifthMonthDecision | None = None
-    fifth_month_appraisal_file_key: str | None = None   # needed for drawer download link
-    fifth_month_decided_at: datetime | None = None       # needed for history timeline
+    fifth_month_appraisal_file_key: str | None = None
+    fifth_month_decided_at: datetime | None = None
     fifth_month_notified_at: datetime | None = None
+    sixth_month_check_date: date | None = None
 
     extension_records: list[ExtensionRecordRead] = []
 
@@ -62,6 +63,10 @@ class AppraisalRecordRead(BaseModel):
     ] | None = None
     failsafe_triggered_at: datetime | None = None
     confirmed_at: datetime | None = None
+
+    resolution_reason: str | None = None
+    resolution_notes: str | None = None
+    resolution_resolved_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 

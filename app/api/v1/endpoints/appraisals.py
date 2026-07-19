@@ -26,99 +26,120 @@ from app.services.appraisal import (
 	submit_fifth_month_decision,
 	submit_third_month_decision,
 )
+from app.core.dependencies import get_current_caller, require_internal_caller, resolve_allowed_bus
+from app.schemas.external import ExternalCaller
+from app.services.appraisal import log_activity
+import logging
 
 router = APIRouter()
 
+logger = logging.getLogger(__name__)
 
-@router.get("/for-regularization")
+@router.get("/for-regularization", response_model=AppraisalListResponse)
 def get_for_regularization(
-	db: Session = Depends(get_db),
-	response_model=AppraisalListResponse
+    db: Session = Depends(get_db),
+    current_user: UserModel | ExternalCaller = Depends(get_current_caller),
 ):
-	try:
-		employees = fetch_all_employees()
-	except RuntimeError as exc:
-		raise HTTPException(status_code=502, detail=str(exc)) from exc
+    try:
+        employees = fetch_all_employees()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-	employee_map = {int(employee.get("rm_tran_no")): employee for employee in employees if employee.get("rm_tran_no") is not None}
+    employee_map = {int(e.get("rm_tran_no")): e for e in employees if e.get("rm_tran_no") is not None}
 
-	records = (
-		db.query(PerformanceAppraisalModel)
-		.filter(PerformanceAppraisalModel.appraisal_status == "REGULARIZED")
-		.order_by(PerformanceAppraisalModel.id.asc())
-		.all()
-	)
+    allowed_bus = resolve_allowed_bus(current_user)
+    query = db.query(PerformanceAppraisalModel).filter(PerformanceAppraisalModel.appraisal_status == "REGULARIZED")
+    if allowed_bus is not None:
+        query = query.filter(PerformanceAppraisalModel.bu_tagging.in_(allowed_bus))
+    records = query.order_by(PerformanceAppraisalModel.id.asc()).all()
 
-	data = [serialize_for_regularization_record(record, employee_map.get(record.rm_tran_no)) for record in records]
-
-	return {
-		"status": "success",
-		"total": len(data),
-		"data": data,
-	}
+    data = [serialize_for_regularization_record(r, employee_map.get(r.rm_tran_no)) for r in records]
+    return {"status": "success", "total": len(data), "data": data}
 
 
 @router.get("/", response_model=AppraisalListResponse)
 def list_appraisals(
-	status_filter: str | None = Query(None, alias="status"),
-	db: Session = Depends(get_db),
-	current_user: UserModel = Depends(get_current_caller),
+    status_filter: str | None = Query(None, alias="status"),
+    db: Session = Depends(get_db),
+    current_user: UserModel | ExternalCaller = Depends(get_current_caller),
 ):
-	try:
-		employees = fetch_all_employees()
-	except RuntimeError as exc:
-		raise HTTPException(status_code=502, detail=str(exc)) from exc
+    try:
+        employees = fetch_all_employees()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-	employee_map = {
-		int(employee.get("rm_tran_no")): employee
-		for employee in employees
-		if employee.get("rm_tran_no") is not None
-	}
-	records = list_appraisal_records(db, status_filter)
-	data = [serialize_appraisal_record(record, employee_map.get(record.rm_tran_no)) for record in records]
-	return {"status": "success", "total": len(data), "data": data}
+    employee_map = {int(e.get("rm_tran_no")): e for e in employees if e.get("rm_tran_no") is not None}
+    records = list_appraisal_records(db, status_filter, allowed_bus=resolve_allowed_bus(current_user))
+    data = [serialize_appraisal_record(r, employee_map.get(r.rm_tran_no)) for r in records]
+    return {"status": "success", "total": len(data), "data": data}
 
 
 @router.get("/{rm_tran_no}", response_model=AppraisalRecordRead)
 def get_appraisal(
-	rm_tran_no: int,
-	db: Session = Depends(get_db),
-	current_user: UserModel = Depends(get_current_caller),
+    rm_tran_no: int,
+    db: Session = Depends(get_db),
+    current_user: UserModel | ExternalCaller = Depends(get_current_caller),
 ):
-	try:
-		employees = fetch_all_employees()
-	except RuntimeError as exc:
-		raise HTTPException(status_code=502, detail=str(exc)) from exc
+    record = get_appraisal_record(db, rm_tran_no)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Appraisal record not found")
 
-	record = get_appraisal_record(db, rm_tran_no)
-	if record is None:
-		raise HTTPException(status_code=404, detail="Appraisal record not found")
+    allowed_bus = resolve_allowed_bus(current_user)
+    if allowed_bus is not None and record.bu_tagging not in allowed_bus:
+        raise HTTPException(status_code=403, detail="Not authorized for this business unit")
 
-	employee = next((item for item in employees if int(item.get("rm_tran_no", -1)) == rm_tran_no), None)
-	return serialize_appraisal_record(record, employee)
-
+    try:
+        employees = fetch_all_employees()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    employee = next((e for e in employees if int(e.get("rm_tran_no", -1)) == rm_tran_no), None)
+    return serialize_appraisal_record(record, employee)
 
 @router.post("/{rm_tran_no}/third-month", response_model=AppraisalRecordRead)
 def submit_third_month(
-	rm_tran_no: int,
-	payload: ThirdMonthSubmissionPayload,
-	db: Session = Depends(get_db),
-	current_user: UserModel = Depends(get_current_caller),
+    rm_tran_no: int,
+    payload: ThirdMonthSubmissionPayload,
+    db: Session = Depends(get_db),
+    caller: ExternalCaller = Depends(get_current_caller),
 ):
-	record = get_appraisal_record(db, rm_tran_no)
-	if record is None:
-		raise HTTPException(status_code=404, detail="Appraisal record not found")
+    record = get_appraisal_record(db, rm_tran_no)
+    if record is None:
+        log_activity(
+            db, rm_tran_no=rm_tran_no, action="THIRD_MONTH_DECISION", status="FAILURE",
+            actor_type="EXTERNAL", actor_id=caller.employee_id, bu_group=caller.bu_group,
+            detail={"error": "record not found"},
+        )
+        db.commit()
+        raise HTTPException(status_code=404, detail="Appraisal record not found")
 
-	submit_third_month_decision(
-		db,
-		record,
-		decision=payload.decision,
-		appraisal_file_key=payload.appraisal_file_key,
-		user_id=current_user.id,
-	)
-	db.commit()
-	db.refresh(record)
-	return serialize_appraisal_record(record)
+    try:
+        submit_third_month_decision(
+            db, record,
+            decision=payload.decision,
+            appraisal_file_key=payload.appraisal_file_key,
+            user_id=None,
+        )
+        log_activity(
+            db, rm_tran_no=rm_tran_no, action="THIRD_MONTH_DECISION", status="SUCCESS",
+            actor_type="EXTERNAL", actor_id=caller.employee_id, bu_group=caller.bu_group,
+            detail={"decision": payload.decision, "file_key": payload.appraisal_file_key},
+        )
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        log_activity(
+            db, rm_tran_no=rm_tran_no, action="THIRD_MONTH_DECISION", status="FAILURE",
+            actor_type="EXTERNAL", actor_id=caller.employee_id, bu_group=caller.bu_group,
+            detail={"decision": payload.decision, "error": str(exc)},
+        )
+        db.commit()
+        logger.exception(
+            "third_month_decision_error rm_tran_no=%s employee_id=%s", rm_tran_no, caller.employee_id,
+        )
+        raise HTTPException(status_code=500, detail="Failed to submit decision") from exc
+
+    db.refresh(record)
+    return serialize_appraisal_record(record)
 
 
 @router.post("/{rm_tran_no}/fifth-month", response_model=AppraisalRecordRead)
@@ -130,17 +151,42 @@ def submit_fifth_month(
 ):
 	record = get_appraisal_record(db, rm_tran_no)
 	if record is None:
+		log_activity(
+			db, rm_tran_no=rm_tran_no, action="FIFTH_MONTH_DECISION", status="FAILURE",
+			actor_type="INTERNAL", actor_id=str(current_user.id), bu_group=None,
+			detail={"error": "record not found"},
+		)
+		db.commit()
 		raise HTTPException(status_code=404, detail="Appraisal record not found")
 
-	submit_fifth_month_decision(
-		db,
-		record,
-		decision=payload.decision,
-		appraisal_file_key=payload.appraisal_file_key,
-		user_id=current_user.id,
-		extension_until=payload.extension_until,
-	)
-	db.commit()
+	try:
+		submit_fifth_month_decision(
+			db,
+			record,
+			decision=payload.decision,
+			appraisal_file_key=payload.appraisal_file_key,
+			user_id=current_user.id,
+			extension_until=payload.extension_until,
+		)
+		log_activity(
+			db, rm_tran_no=rm_tran_no, action="FIFTH_MONTH_DECISION", status="SUCCESS",
+			actor_type="INTERNAL", actor_id=str(current_user.id), bu_group=record.bu_tagging,
+			detail={"decision": payload.decision, "file_key": payload.appraisal_file_key},
+		)
+		db.commit()
+	except Exception as exc:
+		db.rollback()
+		log_activity(
+			db, rm_tran_no=rm_tran_no, action="FIFTH_MONTH_DECISION", status="FAILURE",
+			actor_type="INTERNAL", actor_id=str(current_user.id), bu_group=record.bu_tagging,
+			detail={"decision": payload.decision, "error": str(exc)},
+		)
+		db.commit()
+		logger.exception(
+			"fifth_month_decision_error rm_tran_no=%s user_id=%s", rm_tran_no, current_user.id,
+		)
+		raise HTTPException(status_code=500, detail="Failed to submit decision") from exc
+
 	db.refresh(record)
 	return serialize_appraisal_record(record)
 
@@ -154,20 +200,48 @@ def submit_extension(
 ):
     record = get_appraisal_record(db, rm_tran_no)
     if record is None:
+        log_activity(
+            db, rm_tran_no=rm_tran_no, action="EXTENSION_DECISION", status="FAILURE",
+            actor_type="INTERNAL", actor_id=str(current_user.id), bu_group=None,
+            detail={"error": "record not found"},
+        )
+        db.commit()
         raise HTTPException(status_code=404, detail="Appraisal record not found")
 
-    submit_extension_decision(
-        db,
-        record,
-        decision=payload.decision,
-        appraisal_file_key=payload.appraisal_file_key,
-        extension_until=payload.extension_until,
-        user_id=current_user.id,
-    )
-    db.commit()
+    try:
+        submit_extension_decision(
+            db,
+            record,
+            decision=payload.decision,
+            appraisal_file_key=payload.appraisal_file_key,
+            extension_until=payload.extension_until,
+            user_id=current_user.id,
+        )
+        log_activity(
+            db, rm_tran_no=rm_tran_no, action="EXTENSION_DECISION", status="SUCCESS",
+            actor_type="INTERNAL", actor_id=str(current_user.id), bu_group=record.bu_tagging,
+            detail={
+                "decision": payload.decision,
+                "file_key": payload.appraisal_file_key,
+                "extension_until": str(payload.extension_until) if payload.extension_until else None,
+            },
+        )
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        log_activity(
+            db, rm_tran_no=rm_tran_no, action="EXTENSION_DECISION", status="FAILURE",
+            actor_type="INTERNAL", actor_id=str(current_user.id), bu_group=record.bu_tagging,
+            detail={"decision": payload.decision, "error": str(exc)},
+        )
+        db.commit()
+        logger.exception(
+            "extension_decision_error rm_tran_no=%s user_id=%s", rm_tran_no, current_user.id,
+        )
+        raise HTTPException(status_code=500, detail="Failed to submit decision") from exc
+
     db.refresh(record)
     return serialize_appraisal_record(record)
-
 
 
 @router.post("/{rm_tran_no}/upload-url", response_model=UploadUrlResponse)
@@ -185,7 +259,27 @@ def get_upload_url(
     if content_type not in ALLOWED_CONTENT_TYPES:
         raise HTTPException(status_code=400, detail="Unsupported file type")
 
-    upload_url, file_key = build_upload_url(record, "appraisal-file")
+    try:
+        upload_url, file_key = build_upload_url(record, "appraisal-file")
+        log_activity(
+            db, rm_tran_no=rm_tran_no, action="UPLOAD_URL_ISSUED", status="SUCCESS",
+            actor_type="INTERNAL", actor_id=str(current_user.id), bu_group=record.bu_tagging,
+            detail={"content_type": content_type, "file_key": file_key},
+        )
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        log_activity(
+            db, rm_tran_no=rm_tran_no, action="UPLOAD_URL_ISSUED", status="FAILURE",
+            actor_type="INTERNAL", actor_id=str(current_user.id), bu_group=record.bu_tagging,
+            detail={"content_type": content_type, "error": str(exc)},
+        )
+        db.commit()
+        logger.exception(
+            "upload_url_error rm_tran_no=%s user_id=%s", rm_tran_no, current_user.id,
+        )
+        raise HTTPException(status_code=500, detail="Failed to generate upload URL") from exc
+
     return {"upload_url": upload_url, "file_key": file_key}
 
 

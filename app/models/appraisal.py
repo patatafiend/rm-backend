@@ -12,6 +12,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 from app.db.base import Base
+from sqlalchemy import JSON
 
 
 class PerformanceAppraisalModel(Base):
@@ -130,3 +131,28 @@ class ExtensionRecordModel(Base):
     decided_by = Column(Integer, ForeignKey("users.id"))
 
     appraisal = relationship("PerformanceAppraisalModel", back_populates="extension_records")
+
+class ActivityLogModel(Base):
+    __tablename__ = "activity_logs"
+
+    id = Column(Integer, primary_key=True)
+    rm_tran_no = Column(Integer, nullable=False, index=True)
+
+    action = Column(
+        Enum(
+            "THIRD_MONTH_DECISION",
+            "FIFTH_MONTH_DECISION",
+            "EXTENSION_DECISION",
+            "UPLOAD_URL_ISSUED",
+            name="activity_log_action",
+        ),
+        nullable=False,
+    )
+    status = Column(Enum("SUCCESS", "FAILURE", name="activity_log_status"), nullable=False)
+
+    actor_type = Column(Enum("INTERNAL", "EXTERNAL", name="activity_log_actor_type"), nullable=False)
+    actor_id = Column(String(255), nullable=False)   # user.id as string, or employee_id
+    bu_group = Column(String(255))
+
+    detail = Column(JSON)          # decision, file_key, extension_until, error message, etc.
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

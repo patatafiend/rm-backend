@@ -6,7 +6,10 @@ BU_PERMISSION_MAP: dict[str, str] = {
 }
 
 BU_GROUP_MAP: dict[str, list[str]] = {
-    "MWFL":     ["Recruitment - MWFL (MET)", "Recruitment - MWFL (SEE)"],
-    "Delivery": ["Recruitment - Delivery"],
-    "Security": ["Recruitment - Security"],
+    "delivery": [BU_PERMISSION_MAP["delivery"]],
+    "met":      [BU_PERMISSION_MAP["met"]],
+    "see":      [BU_PERMISSION_MAP["see"]],
+    "security": [BU_PERMISSION_MAP["security"]],
+    "mwfl":     [BU_PERMISSION_MAP["met"], BU_PERMISSION_MAP["see"]],
 }
+

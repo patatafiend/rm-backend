@@ -64,3 +64,18 @@ def get_current_caller(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is blocked")
 
     return user
+
+def resolve_allowed_bus(caller: UserModel | ExternalCaller) -> list[str] | None:
+    """None = unrestricted (internal HR/admin). A list = external caller, BU-scoped."""
+    if isinstance(caller, ExternalCaller):
+        return caller.allowed_bus
+    return None
+
+
+def require_internal_caller(
+    current_user: UserModel | ExternalCaller = Depends(get_current_caller),
+) -> UserModel:
+    """Use on write endpoints — external tokens have no user id and must not reach these."""
+    if isinstance(current_user, ExternalCaller):
+        raise HTTPException(status_code=403, detail="External callers cannot perform this action")
+    return current_user
