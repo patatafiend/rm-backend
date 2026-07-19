@@ -1,8 +1,8 @@
-"""add_activity_logs
+"""add_activity_log_model
 
-Revision ID: 0586477679f4
+Revision ID: 0546d802985e
 Revises: e469c3324507
-Create Date: 2026-07-19 21:10:41.650132
+Create Date: 2026-07-19 21:14:59.409552
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import mysql
 
 # revision identifiers, used by Alembic.
-revision: str = '0586477679f4'
+revision: str = '0546d802985e'
 down_revision: Union[str, None] = 'e469c3324507'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None

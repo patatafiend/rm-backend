@@ -151,8 +151,8 @@ class ActivityLogModel(Base):
     status = Column(Enum("SUCCESS", "FAILURE", name="activity_log_status"), nullable=False)
 
     actor_type = Column(Enum("INTERNAL", "EXTERNAL", name="activity_log_actor_type"), nullable=False)
-    actor_id = Column(String(255), nullable=False)   # user.id as string, or employee_id
+    actor_id = Column(String(255), nullable=False)
     bu_group = Column(String(255))
 
-    detail = Column(JSON)          # decision, file_key, extension_until, error message, etc.
+    detail = Column(JSON)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
