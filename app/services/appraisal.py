@@ -133,6 +133,7 @@ def serialize_appraisal_record(record: PerformanceAppraisalModel, employee: dict
         "third_month_decided_at": _iso_utc(record.third_month_decided_at),
         "fifth_month_appraisal_file_key": record.fifth_month_appraisal_file_key,
         "fifth_month_decided_at": _iso_utc(record.fifth_month_decided_at),
+        "sixth_month_check_date": record.sixth_month_check_date.isoformat() if record.sixth_month_check_date else None,
         "confirmed_at": record.confirmed_at.isoformat() if record.confirmed_at else None,
         "appraisal_status": record.appraisal_status,
         "failsafe_reason": record.failsafe_reason,
@@ -334,6 +335,9 @@ def run_appraisal_cycle_job(db: Session) -> None:
             )
 
         if months >= 5 and record.third_month_decision is None and record.appraisal_status == "PENDING":
+            record.third_month_decision = "NO_APPRAISAL"
+            record.third_month_decided_at = now()
+            record.failsafe_reason = "NO_3RD_MONTH_APPRAISAL"
             create_notification(
                 db,
                 recipient_type="BU_GROUP",
@@ -396,8 +400,12 @@ def run_appraisal_cycle_job(db: Session) -> None:
             record.appraisal_status = "FOR_REGULARIZATION"
             record.failsafe_triggered = True
             record.failsafe_triggered_at = now()
+            record.fifth_month_decision = "NO_APPRAISAL"
+            record.fifth_month_decided_at = now()
             record.failsafe_reason = (
-                "NO_3RD_MONTH_APPRAISAL" if record.third_month_decision is None else "NO_5TH_MONTH_DECISION"
+                    "NO_3RD_MONTH_APPRAISAL"
+                    if record.third_month_decision in (None, "NO_APPRAISAL")
+                    else "NO_5TH_MONTH_DECISION"
             )
             create_notification(
                 db,

@@ -26,7 +26,7 @@ class PerformanceAppraisalModel(Base):
     third_month_due_date = Column(Date)
     third_month_notified_at = Column(DateTime(timezone=True))
     third_month_decision = Column(
-        Enum("PROCEED_5TH", "NON_REGULARIZATION", name="third_month_decision")
+        Enum("PROCEED_5TH", "NON_REGULARIZATION", "NO_APPRAISAL", name="third_month_decision")
     )
     third_month_appraisal_file_key = Column(String(1024))
     third_month_decided_at = Column(DateTime(timezone=True))
@@ -38,6 +38,7 @@ class PerformanceAppraisalModel(Base):
         Enum(
             "REGULARIZATION",
             "NON_REGULARIZATION",
+            "NO_APPRAISAL",
             "EXTENSION",
             name="fifth_month_decision",
         )
