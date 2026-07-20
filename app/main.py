@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
 
 from app.api.v1.router import api_router
 from app.db.session import SessionLocal
@@ -23,11 +24,9 @@ def run_appraisal_cycle():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # startup
     scheduler.add_job(
         run_appraisal_cycle,
-        trigger="interval",
-        seconds=30,
+        trigger=CronTrigger(hour=0, minute=0),  # runs once daily at 00:00 server time
         id="appraisal_cycle_job",
         replace_existing=True,
     )
@@ -35,7 +34,6 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # shutdown
     scheduler.shutdown()
 
 

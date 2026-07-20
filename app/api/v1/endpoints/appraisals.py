@@ -26,7 +26,7 @@ from app.services.appraisal import (
 	submit_fifth_month_decision,
 	submit_third_month_decision,
 )
-from app.core.dependencies import get_current_caller, require_internal_caller, resolve_allowed_bus
+from app.core.dependencies import get_current_caller, resolve_allowed_bus
 from app.schemas.external import ExternalCaller
 from app.services.appraisal import log_activity
 import logging
@@ -147,13 +147,13 @@ def submit_fifth_month(
 	rm_tran_no: int,
 	payload: FifthMonthSubmissionPayload,
 	db: Session = Depends(get_db),
-	current_user: UserModel = Depends(get_current_caller),
+	current_user: ExternalCaller = Depends(get_current_caller),
 ):
 	record = get_appraisal_record(db, rm_tran_no)
 	if record is None:
 		log_activity(
 			db, rm_tran_no=rm_tran_no, action="FIFTH_MONTH_DECISION", status="FAILURE",
-			actor_type="INTERNAL", actor_id=str(current_user.id), bu_group=None,
+			actor_type="EXTERNAL", actor_id=str(current_user.employee_id), bu_group=None,
 			detail={"error": "record not found"},
 		)
 		db.commit()
@@ -165,12 +165,12 @@ def submit_fifth_month(
 			record,
 			decision=payload.decision,
 			appraisal_file_key=payload.appraisal_file_key,
-			user_id=current_user.id,
+			user_id=current_user.employee_id,
 			extension_until=payload.extension_until,
 		)
 		log_activity(
 			db, rm_tran_no=rm_tran_no, action="FIFTH_MONTH_DECISION", status="SUCCESS",
-			actor_type="INTERNAL", actor_id=str(current_user.id), bu_group=record.bu_tagging,
+			actor_type="EXTERNAL", actor_id=str(current_user.employee_id), bu_group=record.bu_tagging,
 			detail={"decision": payload.decision, "file_key": payload.appraisal_file_key},
 		)
 		db.commit()
@@ -178,12 +178,12 @@ def submit_fifth_month(
 		db.rollback()
 		log_activity(
 			db, rm_tran_no=rm_tran_no, action="FIFTH_MONTH_DECISION", status="FAILURE",
-			actor_type="INTERNAL", actor_id=str(current_user.id), bu_group=record.bu_tagging,
+			actor_type="EXTERNAL", actor_id=str(current_user.employee_id), bu_group=record.bu_tagging,
 			detail={"decision": payload.decision, "error": str(exc)},
 		)
 		db.commit()
 		logger.exception(
-			"fifth_month_decision_error rm_tran_no=%s user_id=%s", rm_tran_no, current_user.id,
+			"fifth_month_decision_error rm_tran_no=%s user_id=%s", rm_tran_no, current_user.employee_id,
 		)
 		raise HTTPException(status_code=500, detail="Failed to submit decision") from exc
 
@@ -196,13 +196,13 @@ def submit_extension(
     rm_tran_no: int,
     payload: ExtensionDecisionPayload,
     db: Session = Depends(get_db),
-    current_user: UserModel = Depends(get_current_caller),
+    current_user: ExternalCaller = Depends(get_current_caller),
 ):
     record = get_appraisal_record(db, rm_tran_no)
     if record is None:
         log_activity(
             db, rm_tran_no=rm_tran_no, action="EXTENSION_DECISION", status="FAILURE",
-            actor_type="INTERNAL", actor_id=str(current_user.id), bu_group=None,
+            actor_type="EXTERNAL", actor_id=str(current_user.employee_id), bu_group=None,
             detail={"error": "record not found"},
         )
         db.commit()
@@ -215,11 +215,11 @@ def submit_extension(
             decision=payload.decision,
             appraisal_file_key=payload.appraisal_file_key,
             extension_until=payload.extension_until,
-            user_id=current_user.id,
+            user_id=current_user.employee_id,
         )
         log_activity(
             db, rm_tran_no=rm_tran_no, action="EXTENSION_DECISION", status="SUCCESS",
-            actor_type="INTERNAL", actor_id=str(current_user.id), bu_group=record.bu_tagging,
+            actor_type="EXTERNAL", actor_id=str(current_user.employee_id), bu_group=record.bu_tagging,
             detail={
                 "decision": payload.decision,
                 "file_key": payload.appraisal_file_key,
@@ -231,12 +231,12 @@ def submit_extension(
         db.rollback()
         log_activity(
             db, rm_tran_no=rm_tran_no, action="EXTENSION_DECISION", status="FAILURE",
-            actor_type="INTERNAL", actor_id=str(current_user.id), bu_group=record.bu_tagging,
+            actor_type="EXTERNAL", actor_id=str(current_user.employee_id), bu_group=record.bu_tagging,
             detail={"decision": payload.decision, "error": str(exc)},
         )
         db.commit()
         logger.exception(
-            "extension_decision_error rm_tran_no=%s user_id=%s", rm_tran_no, current_user.id,
+            "extension_decision_error rm_tran_no=%s user_id=%s", rm_tran_no, current_user.employee_id,
         )
         raise HTTPException(status_code=500, detail="Failed to submit decision") from exc
 
@@ -249,7 +249,7 @@ def get_upload_url(
     rm_tran_no: int,
     content_type: str = Query("application/pdf"),
     db: Session = Depends(get_db),
-    current_user: UserModel = Depends(get_current_caller),
+    current_user: ExternalCaller = Depends(get_current_caller),
 ):
     record = get_appraisal_record(db, rm_tran_no)
     if record is None:
@@ -263,7 +263,7 @@ def get_upload_url(
         upload_url, file_key = build_upload_url(record, "appraisal-file")
         log_activity(
             db, rm_tran_no=rm_tran_no, action="UPLOAD_URL_ISSUED", status="SUCCESS",
-            actor_type="INTERNAL", actor_id=str(current_user.id), bu_group=record.bu_tagging,
+            actor_type="EXTERNAL", actor_id=str(current_user.employee_id), bu_group=record.bu_tagging,
             detail={"content_type": content_type, "file_key": file_key},
         )
         db.commit()
@@ -271,12 +271,12 @@ def get_upload_url(
         db.rollback()
         log_activity(
             db, rm_tran_no=rm_tran_no, action="UPLOAD_URL_ISSUED", status="FAILURE",
-            actor_type="INTERNAL", actor_id=str(current_user.id), bu_group=record.bu_tagging,
+            actor_type="EXTERNAL", actor_id=str(current_user.employee_id), bu_group=record.bu_tagging,
             detail={"content_type": content_type, "error": str(exc)},
         )
         db.commit()
         logger.exception(
-            "upload_url_error rm_tran_no=%s user_id=%s", rm_tran_no, current_user.id,
+            "upload_url_error rm_tran_no=%s user_id=%s", rm_tran_no, current_user.employee_id,
         )
         raise HTTPException(status_code=500, detail="Failed to generate upload URL") from exc
 
