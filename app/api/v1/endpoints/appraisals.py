@@ -4,7 +4,6 @@ from sqlalchemy.orm import Session
 from app.core.dependencies import get_current_caller
 from app.db.session import get_db
 from app.models.appraisal import PerformanceAppraisalModel
-from app.models.user import UserModel
 from app.schemas.appraisal import (
 	AppraisalListResponse,
 	AppraisalRecordRead,
@@ -38,7 +37,7 @@ logger = logging.getLogger(__name__)
 @router.get("/for-regularization", response_model=AppraisalListResponse)
 def get_for_regularization(
     db: Session = Depends(get_db),
-    current_user: UserModel | ExternalCaller = Depends(get_current_caller),
+    current_user: ExternalCaller = Depends(get_current_caller),
 ):
     try:
         employees = fetch_all_employees()
@@ -61,7 +60,7 @@ def get_for_regularization(
 def list_appraisals(
     status_filter: str | None = Query(None, alias="status"),
     db: Session = Depends(get_db),
-    current_user: UserModel | ExternalCaller = Depends(get_current_caller),
+    current_user: ExternalCaller = Depends(get_current_caller),
 ):
     try:
         employees = fetch_all_employees()
@@ -78,7 +77,7 @@ def list_appraisals(
 def get_appraisal(
     rm_tran_no: int,
     db: Session = Depends(get_db),
-    current_user: UserModel | ExternalCaller = Depends(get_current_caller),
+    current_user: ExternalCaller = Depends(get_current_caller),
 ):
     record = get_appraisal_record(db, rm_tran_no)
     if record is None:
@@ -288,7 +287,7 @@ def get_download_url(
     rm_tran_no: int,
     file_key: str,
     db: Session = Depends(get_db),
-    current_user: UserModel = Depends(get_current_caller),
+    current_user: ExternalCaller = Depends(get_current_caller),
 ):
     record = get_appraisal_record(db, rm_tran_no)
     if record is None:
