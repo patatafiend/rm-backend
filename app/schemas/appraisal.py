@@ -16,6 +16,7 @@ AppraisalStatus = Literal[
 ThirdMonthDecision = Literal["PROCEED_5TH", "NON_REGULARIZATION", "NO_APPRAISAL"]
 FifthMonthDecision = Literal["REGULARIZATION", "NON_REGULARIZATION", "EXTENSION", "NO_APPRAISAL"]
 ExtensionDecision = Literal["REGULARIZATION", "NON_REGULARIZATION", "EXTENSION"]
+ResolutionReason = Literal["LEFT_COMPANY", "AWOL", "TRANSFERRED", "DATA_ERROR", "OTHER"]
 
 
 class ExtensionRecordRead(BaseModel):
@@ -31,13 +32,13 @@ class ExtensionRecordRead(BaseModel):
 
 
 class AppraisalRecordRead(BaseModel):
-    rm_tran_no: int
-    erms_id: int
+    employee_id: int
     employee_name: str | None = None
     hr_company: str | None = None
     hr_client: str | None = None
     bu_tagging: str
     rm_pos_applied: str | None = None
+    emp_status: str | None = None
     contract_sdate: date
 
     third_month_due_date: date | None = None
@@ -64,7 +65,7 @@ class AppraisalRecordRead(BaseModel):
     failsafe_triggered_at: datetime | None = None
     confirmed_at: datetime | None = None
 
-    resolution_reason: str | None = None
+    resolution_reason: ResolutionReason | None = None
     resolution_notes: str | None = None
     resolution_resolved_at: datetime | None = None
 

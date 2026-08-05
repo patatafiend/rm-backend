@@ -19,8 +19,7 @@ class PerformanceAppraisalModel(Base):
     __tablename__ = "performance_appraisals"
 
     id = Column(Integer, primary_key=True)
-    rm_tran_no = Column(Integer, nullable=False, unique=True, index=True)
-    erms_id = Column(BigInteger, nullable=False)
+    employee_id = Column(BigInteger, nullable=False, unique=True, index=True)
     contract_sdate = Column(Date, nullable=False)
     bu_tagging = Column(String(255), nullable=False, index=True)
 
@@ -72,6 +71,7 @@ class PerformanceAppraisalModel(Base):
         ),
         default="PENDING",
         nullable=False,
+        index=True,
     )
     confirmed_at = Column(DateTime(timezone=True))
 
@@ -93,11 +93,11 @@ class PerformanceAppraisalModel(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     extension_records = relationship(
-    "ExtensionRecordModel",
-    back_populates="appraisal",
-    order_by="ExtensionRecordModel.sequence",
-    cascade="all, delete-orphan",
-)
+        "ExtensionRecordModel",
+        back_populates="appraisal",
+        order_by="ExtensionRecordModel.sequence",
+        cascade="all, delete-orphan",
+    )
 
 
 class NotificationModel(Base):
@@ -107,10 +107,11 @@ class NotificationModel(Base):
     recipient_type = Column(Enum("BU_GROUP", "ROLE", name="recipient_type"), nullable=False)
     recipient_value = Column(String(255), nullable=False)
     milestone = Column(String(255), nullable=False)
-    rm_tran_no = Column(Integer, nullable=False, index=True)
+    employee_id = Column(BigInteger, nullable=False, index=True)
     message = Column(String(1000), nullable=False)
     read_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
 
 class ExtensionRecordModel(Base):
     __tablename__ = "extension_records"
@@ -132,11 +133,12 @@ class ExtensionRecordModel(Base):
 
     appraisal = relationship("PerformanceAppraisalModel", back_populates="extension_records")
 
+
 class ActivityLogModel(Base):
     __tablename__ = "activity_logs"
 
     id = Column(Integer, primary_key=True)
-    rm_tran_no = Column(Integer, nullable=False, index=True)
+    employee_id = Column(BigInteger, nullable=False, index=True)
 
     action = Column(
         Enum(

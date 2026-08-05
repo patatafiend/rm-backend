@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import boto3
 from botocore.client import Config
-
+import logging
 from app.core.config import settings
 
 _s3_client = None
