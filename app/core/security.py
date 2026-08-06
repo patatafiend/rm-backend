@@ -43,15 +43,17 @@ def create_external_access_token(
     employee_id: str,
     bu_group: str,
     allowed_bus: list[str],
+    allowed_categories: list[str] | None = None,
 ) -> str:
     expire = datetime.now(timezone.utc) + timedelta(
         minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
     )
     payload = {
-        "sub":         employee_id,
-        "bu_group":    bu_group,
-        "allowed_bus": allowed_bus,
-        "type":        "external",
-        "exp":         expire,
+        "sub":                employee_id,
+        "bu_group":           bu_group,
+        "allowed_bus":        allowed_bus,
+        "allowed_categories": allowed_categories,
+        "type":               "external",
+        "exp":                expire,
     }
     return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.ALGORITHM)

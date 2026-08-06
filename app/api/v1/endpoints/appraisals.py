@@ -25,7 +25,7 @@ from app.services.appraisal import (
 	submit_fifth_month_decision,
 	submit_third_month_decision,
 )
-from app.core.dependencies import get_current_caller, resolve_allowed_bus
+from app.core.dependencies import get_current_caller, resolve_allowed_bus, resolve_allowed_categories
 from app.schemas.external import ExternalCaller
 from app.services.appraisal import log_activity
 import logging
@@ -33,6 +33,25 @@ import logging
 router = APIRouter()
 
 logger = logging.getLogger(__name__)
+
+
+def _filter_by_category(
+    records: list[PerformanceAppraisalModel],
+    employee_map: dict[int, dict],
+    allowed_categories: list[str] | None,
+) -> list[PerformanceAppraisalModel]:
+    """ecategory isn't a DB column — there's no migration/backfill path
+    available, and the live feed data is already fetched into employee_map
+    for every endpoint that needs this. Fail closed: if a category-restricted
+    caller asks about a record whose employee isn't in the current feed
+    (e.g. left the company), it's excluded rather than let through unchecked."""
+    if allowed_categories is None:
+        return records
+    return [
+        r for r in records
+        if employee_map.get(r.employee_id, {}).get("ecategory") in allowed_categories
+    ]
+
 
 @router.get("/for-regularization", response_model=AppraisalListResponse)
 def get_for_regularization(
@@ -51,6 +70,7 @@ def get_for_regularization(
     if allowed_bus is not None:
         query = query.filter(PerformanceAppraisalModel.bu_tagging.in_(allowed_bus))
     records = query.order_by(PerformanceAppraisalModel.id.asc()).all()
+    records = _filter_by_category(records, employee_map, resolve_allowed_categories(current_user))
 
     data = [serialize_for_regularization_record(r, employee_map.get(r.employee_id)) for r in records]
     return {"status": "success", "total": len(data), "data": data}
@@ -69,6 +89,7 @@ def list_appraisals(
 
     employee_map = {int(e.get("empidno")): e for e in employees if e.get("empidno") is not None}
     records = list_appraisal_records(db, status_filter, allowed_bus=resolve_allowed_bus(current_user))
+    records = _filter_by_category(records, employee_map, resolve_allowed_categories(current_user))
     data = [serialize_appraisal_record(r, employee_map.get(r.employee_id)) for r in records]
     return {"status": "success", "total": len(data), "data": data}
 
@@ -92,6 +113,12 @@ def get_appraisal(
     except RuntimeError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     employee = next((e for e in employees if int(e.get("empidno", -1)) == employee_id), None)
+
+    allowed_categories = resolve_allowed_categories(current_user)
+    if allowed_categories is not None:
+        if employee is None or employee.get("ecategory") not in allowed_categories:
+            raise HTTPException(status_code=403, detail="Not authorized for this employee category")
+
     return serialize_appraisal_record(record, employee)
 
 @router.post("/{employee_id}/third-month", response_model=AppraisalRecordRead)

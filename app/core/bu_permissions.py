@@ -28,3 +28,14 @@ APPRAISALS_BU_GROUP_MAP: dict[str, list[str]] = {
     "mwfl":     ["MWFL"],
 }
 
+# ecategory comes from the two-feed employee data (sec feed: GUARD/STAFF,
+# nonsec feed: MANPOWER/STAFF) and is independent of bu_grouping — a given
+# bu_tagging value ("Security" or "MWFL") can contain both frontline
+# (GUARD/MANPOWER) and STAFF employees mixed together. This is a separate,
+# optional filter dimension on /authorize that ANDs with bu_group rather
+# than replacing it.
+APPRAISALS_CATEGORY_MAP: dict[str, list[str]] = {
+    "staff":     ["STAFF"],
+    "non_staff": ["GUARD", "MANPOWER"],
+}
+

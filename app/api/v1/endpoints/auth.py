@@ -16,7 +16,7 @@ from app.schemas.auth import (
 )
 from app.schemas.device import DeviceInfo
 from urllib.parse import urlparse
-from app.core.bu_permissions import BU_GROUP_MAP, APPRAISALS_BU_GROUP_MAP
+from app.core.bu_permissions import BU_GROUP_MAP, APPRAISALS_BU_GROUP_MAP, APPRAISALS_CATEGORY_MAP
 from app.core.security import create_external_access_token
 from app.models.user import AuthorizedDomainModel
 
@@ -107,6 +107,7 @@ def authorize_external(
     employee_id: str = Query(...),
     bu_group: str = Query(...),
     system: str = Query("rm"),  # "rm" | "analytics" | "appraisals"
+    category: str | None = Query(None),  # "staff" | "non_staff" — appraisals only, optional
     db: Session = Depends(get_db),
 ):
     VALID_SYSTEMS = {"rm", "analytics", "appraisals"}
@@ -137,10 +138,38 @@ def authorize_external(
 
     allowed_bus = list(set(allowed_bus))
 
+    # category is a separate, optional filter dimension (ecategory: STAFF vs
+    # GUARD/MANPOWER) that ANDs with bu_group rather than replacing it.
+    # ecategory only exists in the two-feed data that appraisals uses, so a
+    # category on rm/analytics would silently do nothing useful — reject it
+    # outright instead of accepting a param that has no effect.
+    allowed_categories: list[str] | None = None
+    if category is not None:
+        if system != "appraisals":
+            raise HTTPException(
+                status_code=400,
+                detail="category is only supported for system=appraisals",
+            )
+        cat_keys = [c.strip().lower().replace("-", "_") for c in category.split(",")]
+        allowed_categories = []
+        invalid_categories = []
+        for key in cat_keys:
+            if key not in APPRAISALS_CATEGORY_MAP:
+                invalid_categories.append(key)
+            else:
+                allowed_categories.extend(APPRAISALS_CATEGORY_MAP[key])
+        if invalid_categories:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown category value(s): {invalid_categories}. Valid: {list(APPRAISALS_CATEGORY_MAP.keys())}"
+            )
+        allowed_categories = list(set(allowed_categories))
+
     access_token = create_external_access_token(
         employee_id=employee_id,
         bu_group=bu_group,
         allowed_bus=allowed_bus,
+        allowed_categories=allowed_categories,
     )
 
     # Route to the right frontend path based on system

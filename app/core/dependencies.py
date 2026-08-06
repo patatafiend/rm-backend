@@ -50,6 +50,7 @@ def get_current_caller(
             employee_id=payload["sub"],
             bu_group=payload.get("bu_group", ""),
             allowed_bus=payload.get("allowed_bus", []),
+            allowed_categories=payload.get("allowed_categories"),
         )
 
     # For normal users, enforce access type
@@ -69,6 +70,14 @@ def resolve_allowed_bus(caller: UserModel | ExternalCaller) -> list[str] | None:
     """None = unrestricted (internal HR/admin). A list = external caller, BU-scoped."""
     if isinstance(caller, ExternalCaller):
         return caller.allowed_bus
+    return None
+
+
+def resolve_allowed_categories(caller: UserModel | ExternalCaller) -> list[str] | None:
+    """None = unrestricted (internal caller, or external caller who didn't pass
+    the category param on /authorize). A list = external caller, ecategory-scoped."""
+    if isinstance(caller, ExternalCaller):
+        return caller.allowed_categories
     return None
 
 

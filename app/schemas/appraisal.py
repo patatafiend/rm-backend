@@ -39,6 +39,7 @@ class AppraisalRecordRead(BaseModel):
     bu_tagging: str
     rm_pos_applied: str | None = None
     emp_status: str | None = None
+    ecategory: str | None = None
     contract_sdate: date
 
     third_month_due_date: date | None = None

@@ -157,6 +157,7 @@ def serialize_appraisal_record(record: PerformanceAppraisalModel, employee: dict
                 "hr_client": employee.get("ecurrentcompany"),
                 "rm_pos_applied": employee.get("eposition"),
                 "emp_status": employee.get("estatus"),
+                "ecategory": employee.get("ecategory"),
             }
         )
 
