@@ -16,7 +16,7 @@ from app.schemas.auth import (
 )
 from app.schemas.device import DeviceInfo
 from urllib.parse import urlparse
-from app.core.bu_permissions import BU_GROUP_MAP
+from app.core.bu_permissions import BU_GROUP_MAP, APPRAISALS_BU_GROUP_MAP
 from app.core.security import create_external_access_token
 from app.models.user import AuthorizedDomainModel
 
@@ -106,31 +106,36 @@ def mfa_disable(
 def authorize_external(
     employee_id: str = Query(...),
     bu_group: str = Query(...),
-    system: str = Query("rm"),  # "rm" | "analytics" | "appraisal"
+    system: str = Query("rm"),  # "rm" | "analytics" | "appraisals"
     db: Session = Depends(get_db),
 ):
+    VALID_SYSTEMS = {"rm", "analytics", "appraisals"}
+    if system not in VALID_SYSTEMS:
+        raise HTTPException(status_code=400, detail=f"Unknown system '{system}'. Valid: {list(VALID_SYSTEMS)}")
+
+    # appraisals (PAM) keys bu_tagging off the newer, bundled-only feed
+    # data (Security/MWFL) — rm and analytics still key off the older,
+    # granular bu_tagging values, so they keep the original map.
+    group_map = APPRAISALS_BU_GROUP_MAP if system == "appraisals" else BU_GROUP_MAP
+
     groups = [g.strip() for g in bu_group.split(",")]
     allowed_bus = []
     invalid_groups = []
 
     for group in groups:
-        bus = BU_GROUP_MAP.get(group.strip().lower())
-        if not bus:
+        key = group.strip().lower()
+        if key not in group_map:
             invalid_groups.append(group)
         else:
-            allowed_bus.extend(bus)
+            allowed_bus.extend(group_map[key])
 
     if invalid_groups:
         raise HTTPException(
             status_code=400,
-            detail=f"Unknown bu_group(s): {invalid_groups}. Valid: {list(BU_GROUP_MAP.keys())}"
+            detail=f"Unknown bu_group(s): {invalid_groups}. Valid: {list(group_map.keys())}"
         )
 
     allowed_bus = list(set(allowed_bus))
-
-    VALID_SYSTEMS = {"rm", "analytics", "appraisals"}
-    if system not in VALID_SYSTEMS:
-        raise HTTPException(status_code=400, detail=f"Unknown system '{system}'. Valid: {list(VALID_SYSTEMS)}")
 
     access_token = create_external_access_token(
         employee_id=employee_id,
