@@ -243,8 +243,10 @@ def submit_extension_decision(
     decision: str,
     user_id: int,
     appraisal_file_key: str | None = None,
-    extension_until: date | None = None,
 ) -> PerformanceAppraisalModel:
+    if decision not in ("REGULARIZATION", "NON_REGULARIZATION"):
+        raise ValueError(f"Invalid extension decision: {decision!r}. Only one extension is allowed per employee.")
+
     latest = get_latest_extension_record(db, record.id)
     if latest is None:
         raise ValueError("No active extension record found for this appraisal")
@@ -254,11 +256,7 @@ def submit_extension_decision(
     latest.decided_by = user_id
     latest.decided_at = now()
 
-    if decision == "EXTENSION":
-        if extension_until is None:
-            raise ValueError("extension_until is required when extending again")
-        create_extension_record(db, record, extension_until=extension_until, granted_by=user_id)
-    elif decision == "REGULARIZATION":
+    if decision == "REGULARIZATION":
         record.appraisal_status = "REGULARIZED"
         record.confirmed_at = now()
     else:
@@ -329,7 +327,6 @@ def run_appraisal_cycle_job(db: Session) -> None:
         today = date.today()
 
         if months < 3:
-            db.flush()
             continue
 
         if record.sixth_month_check_date is None:
@@ -437,8 +434,7 @@ def run_appraisal_cycle_job(db: Session) -> None:
                 message="Probationary appraisal has reached the fail-safe window.",
             )
 
-        db.flush()
-
+    db.flush()
     reconcile_resolved_employees(db, by_employee_id)
     db.commit()
 

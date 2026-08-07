@@ -16,7 +16,12 @@ from app.schemas.auth import (
 )
 from app.schemas.device import DeviceInfo
 from urllib.parse import urlparse
-from app.core.bu_permissions import BU_GROUP_MAP, APPRAISALS_BU_GROUP_MAP, APPRAISALS_CATEGORY_MAP
+from app.core.bu_permissions import (
+    BU_GROUP_MAP,
+    APPRAISALS_BU_GROUP_MAP,
+    APPRAISALS_CATEGORY_MAP,
+    APPRAISALS_CATEGORY_ALIASES,
+)
 from app.core.security import create_external_access_token
 from app.models.user import AuthorizedDomainModel
 
@@ -138,11 +143,6 @@ def authorize_external(
 
     allowed_bus = list(set(allowed_bus))
 
-    # category is a separate, optional filter dimension (ecategory: STAFF vs
-    # GUARD/MANPOWER) that ANDs with bu_group rather than replacing it.
-    # ecategory only exists in the two-feed data that appraisals uses, so a
-    # category on rm/analytics would silently do nothing useful — reject it
-    # outright instead of accepting a param that has no effect.
     allowed_categories: list[str] | None = None
     if category is not None:
         if system != "appraisals":
@@ -154,14 +154,16 @@ def authorize_external(
         allowed_categories = []
         invalid_categories = []
         for key in cat_keys:
-            if key not in APPRAISALS_CATEGORY_MAP:
+            bucket = APPRAISALS_CATEGORY_ALIASES.get(key, key)
+            if bucket not in APPRAISALS_CATEGORY_MAP:
                 invalid_categories.append(key)
             else:
-                allowed_categories.extend(APPRAISALS_CATEGORY_MAP[key])
+                allowed_categories.extend(APPRAISALS_CATEGORY_MAP[bucket])
         if invalid_categories:
+            valid_values = list(APPRAISALS_CATEGORY_MAP.keys()) + list(APPRAISALS_CATEGORY_ALIASES.keys())
             raise HTTPException(
                 status_code=400,
-                detail=f"Unknown category value(s): {invalid_categories}. Valid: {list(APPRAISALS_CATEGORY_MAP.keys())}"
+                detail=f"Unknown category value(s): {invalid_categories}. Valid: {valid_values}"
             )
         allowed_categories = list(set(allowed_categories))
 

@@ -15,7 +15,16 @@ AppraisalStatus = Literal[
 
 ThirdMonthDecision = Literal["PROCEED_5TH", "NON_REGULARIZATION", "NO_APPRAISAL"]
 FifthMonthDecision = Literal["REGULARIZATION", "NON_REGULARIZATION", "EXTENSION", "NO_APPRAISAL"]
+# "EXTENSION" is kept here (rather than narrowed) because ExtensionRecordRead
+# uses this type to read back whatever decision value is already stored —
+# including historical rows from before extensions were capped at one per
+# employee. It is NOT a valid value to submit going forward; see
+# ExtensionResolutionDecision below for the payload-side type.
 ExtensionDecision = Literal["REGULARIZATION", "NON_REGULARIZATION", "EXTENSION"]
+# Only one extension is allowed per employee (business rule, not a DB
+# constraint — the extension_records table still supports multiple rows).
+# Resolving the single active extension can only end it, not extend again.
+ExtensionResolutionDecision = Literal["REGULARIZATION", "NON_REGULARIZATION"]
 ResolutionReason = Literal["LEFT_COMPANY", "AWOL", "TRANSFERRED", "DATA_ERROR", "OTHER"]
 
 
@@ -91,15 +100,14 @@ class FifthMonthSubmissionPayload(BaseModel):
 
 
 class ExtensionDecisionPayload(BaseModel):
-    decision: ExtensionDecision
+    # Resolving the active (and only) extension record — REGULARIZATION or
+    # NON_REGULARIZATION only. "Extend again" is no longer offered.
+    decision: ExtensionResolutionDecision
     appraisal_file_key: str | None = None
-    extension_until: date | None = None
 
     @model_validator(mode="after")
     def validate_fields_for_decision(self) -> "ExtensionDecisionPayload":
-        if self.decision == "EXTENSION" and self.extension_until is None:
-            raise ValueError("extension_until is required when decision is EXTENSION")
-        if self.decision != "EXTENSION" and not self.appraisal_file_key:
+        if not self.appraisal_file_key:
             raise ValueError("appraisal_file_key is required for a final decision")
         return self
 

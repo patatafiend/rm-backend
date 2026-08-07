@@ -240,7 +240,6 @@ def submit_extension(
             record,
             decision=payload.decision,
             appraisal_file_key=payload.appraisal_file_key,
-            extension_until=payload.extension_until,
             user_id=None,
         )
         log_activity(
@@ -249,7 +248,6 @@ def submit_extension(
             detail={
                 "decision": payload.decision,
                 "file_key": payload.appraisal_file_key,
-                "extension_until": str(payload.extension_until) if payload.extension_until else None,
             },
         )
         db.commit()
