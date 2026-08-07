@@ -56,7 +56,6 @@ def _filter_by_category(
 @router.get("/for-regularization", response_model=AppraisalListResponse)
 def get_for_regularization(
     db: Session = Depends(get_db),
-    current_user: ExternalCaller = Depends(get_current_caller),
 ):
     try:
         employees = fetch_all_employees()
@@ -65,12 +64,12 @@ def get_for_regularization(
 
     employee_map = {int(e.get("empidno")): e for e in employees if e.get("empidno") is not None}
 
-    allowed_bus = resolve_allowed_bus(current_user)
-    query = db.query(PerformanceAppraisalModel).filter(PerformanceAppraisalModel.appraisal_status == "REGULARIZED")
-    if allowed_bus is not None:
-        query = query.filter(PerformanceAppraisalModel.bu_tagging.in_(allowed_bus))
-    records = query.order_by(PerformanceAppraisalModel.id.asc()).all()
-    records = _filter_by_category(records, employee_map, resolve_allowed_categories(current_user))
+    records = (
+        db.query(PerformanceAppraisalModel)
+        .filter(PerformanceAppraisalModel.appraisal_status == "REGULARIZED")
+        .order_by(PerformanceAppraisalModel.id.asc())
+        .all()
+    )
 
     data = [serialize_for_regularization_record(r, employee_map.get(r.employee_id)) for r in records]
     return {"status": "success", "total": len(data), "data": data}
